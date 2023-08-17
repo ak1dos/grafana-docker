@@ -40,11 +40,8 @@ services:
       - '/:/host:ro,rslave'
 
   cadvisor:
-    platform: linux/aarch64
     image: zcube/cadvisor:latest
     container_name: cadvisor
-    # ports:
-    #   - "8080:8080"
     privileged: true
     devices:
       - /dev/kmsg:/dev/kmsg
