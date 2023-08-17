@@ -23,7 +23,7 @@ services:
     image: grafana/grafana:latest
     container_name: grafana
     ports:
-      - "3000:3000"
+      - "3100:3100"
     volumes:
       - grafana-data:/var/lib/grafana
     restart: unless-stopped
