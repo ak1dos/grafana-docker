@@ -52,3 +52,8 @@ services:
       - /etc/machine-id:/etc/machine-id:ro
       - /var/lib/dbus/machine-id:/var/lib/dbus/machine-id:ro
     restart: unless-stopped
+
+networks:
+  default:
+    external:
+      name: nginx-proxy
