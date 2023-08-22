@@ -37,4 +37,4 @@ scrape_configs:
     metrics_path: /minio/v2/metrics/cluster
     scheme: http
     static_configs:
-    - targets: ['minio-proxy:9010']
+    - targets: ['localhost:9010']
