@@ -33,7 +33,6 @@ scrape_configs:
       - targets: [ 'leaderboard:3100' ]
   
   - job_name: minio-job
-    bearer_token: eyJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJwcm9tZXRoZXVzIiwiZXhwIjo0ODQ2MzQwNzk0fQ.PfGsmhmilZGcGYL3gyW346vwZAyf8tITVrwyTqlm49vx2XLR6NmweX7xf9xg3RhMo55sOpbr3BvrUTCQybOFOQ
     metrics_path: /minio/v2/metrics/cluster
     scheme: http
     static_configs:
