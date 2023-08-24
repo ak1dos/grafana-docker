@@ -37,3 +37,9 @@ scrape_configs:
     scheme: http
     static_configs:
     - targets: ['minio-proxy:9010']
+  
+  - job_name: minio-job
+    metrics_path: /metrics
+    scheme: http
+    static_configs:
+    - targets: ['loki:3100']
