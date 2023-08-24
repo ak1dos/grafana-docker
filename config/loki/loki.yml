@@ -55,7 +55,7 @@ storage_config:
     resync_interval: 5s
     shared_store: s3
   aws:
-    s3: http://420zrXfrgENp2YQUfuuJ:Q2T2zcjUVLCk2UZcLwq318KNc8rnFfiihuIA93Ur@minio-gateway.:9010/loki
+    s3: http://420zrXfrgENp2YQUfuuJ:Q2T2zcjUVLCk2UZcLwq318KNc8rnFfiihuIA93Ur@minio-gateway:9010/loki
     s3forcepathstyle: true
 
 limits_config:
