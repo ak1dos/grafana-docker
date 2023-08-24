@@ -38,7 +38,7 @@ scrape_configs:
     static_configs:
     - targets: ['minio-proxy:9010']
   
-  - job_name: minio-job
+  - job_name: loki-job
     metrics_path: /metrics
     scheme: http
     static_configs:
