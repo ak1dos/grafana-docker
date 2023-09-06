@@ -17,7 +17,7 @@ scrape_configs: #The most important part
         instance: fujiserver #Label identifier for instance (hostname -f)
         env: fujiserver #Environment label
         job: secure #Job label
-        __path__: /var/log/secure
+        __path__: /var/log/auth.log
   # - job_name: docker
   #   docker_sd_configs:
   #     - host: unix:///var/run/docker.sock
