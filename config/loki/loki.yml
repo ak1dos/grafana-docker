@@ -85,6 +85,7 @@ schema_config:
       period: 24h
 
 limits_config:
+  retention_period: 30d
   max_cache_freshness_per_query: '10m'
   enforce_metric_name: false
   reject_old_samples: true
@@ -95,11 +96,11 @@ limits_config:
   split_queries_by_interval: 15m
 
 chunk_store_config:
-  max_look_back_period: 336h
+  max_look_back_period: 30d
 
-table_manager:
-  retention_deletes_enabled: true
-  retention_period: 336h
+# table_manager:
+#   retention_deletes_enabled: true
+#   retention_period: 336h
 
 query_range:
   # make queries more cache-able by aligning them with their step intervals
@@ -122,3 +123,8 @@ querier:
 compactor:
   working_directory: /tmp/compactor
   shared_store: s3
+  retention_enabled: true
+  retention_delete_delay: 2h
+  retention_delete_worker_count: 150
+  deletion_mode: filter-and-delete
+  delete_request_cancel_period: 5m
