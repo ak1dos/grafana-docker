@@ -14,8 +14,8 @@ common:
       endpoint: minio-proxy:9010
       insecure: true
       bucketnames: loki
-      access_key_id: 420zrXfrgENp2YQUfuuJ
-      secret_access_key: Q2T2zcjUVLCk2UZcLwq318KNc8rnFfiihuIA93Ur
+      access_key_id: DouPy2LujTgfpGn6lHyW
+      secret_access_key: pkLkJvauw9u3nxn2oh1nrnB6fg7sEE19M4ixZaPE
       s3forcepathstyle: true
   compactor_address: http://loki:3100
 
