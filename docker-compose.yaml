@@ -38,6 +38,7 @@ services:
     container_name: promtail
     volumes:
       - ./config/promtail/promtail.yml:/etc/promtail/promtail.yml
+      - ./config/promtail/positions:/tmp/positions
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
       - /var/run/docker.sock:/var/run/docker.sock
       - /var/log/:/var/log/
@@ -82,5 +83,4 @@ services:
 
 networks:
   default:
-    external:
-      name: nginx-proxy
+    name: nginx-proxy
