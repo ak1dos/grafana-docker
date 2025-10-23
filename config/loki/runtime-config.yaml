@@ -1,0 +1,4 @@
+overrides:
+  # per tutti i tenant; puoi anche specificare il tenant ID
+  default:
+    deletion_mode: filter-and-delete
