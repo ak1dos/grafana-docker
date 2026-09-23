@@ -24,3 +24,7 @@ Richiesta esplicita utente: backend su Fuji, solo Alloy su Ryzen; autorizzata ca
 ## Verifiche locali e limiti
 
 Bootstrap e validatori Compose/promtool/Loki/Alloy/nginx passati. Guardia DAS già provata su ZFS reale e directory non ZFS. Reboot, retention di 30 giorni, backup nuovi percorsi e notifiche alert non collaudati/configurati da questa sessione. Repository remoto non rinominato né archiviato.
+
+## Semplificazione e accesso LAN
+
+Su richiesta utente, il Compose principale ora contiene tutti i servizi Fuji senza extends; eliminato storage/compose.yaml ridondante. Confronto JSON della configurazione risolta prima/dopo: unica variazione funzionale bind Grafana da 127.0.0.1 a 192.168.1.54, porta 13000. Ricreato soltanto Grafana. Dal Mac verificati HTTP 200 sia /api/health (database ok) sia /login su http://192.168.1.54:13000. Smoke Compose aggiornato e validato.

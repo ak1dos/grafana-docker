@@ -38,13 +38,17 @@ Le credenziali runtime appartengono a `mika`, directory 0700 e file 0600; i mani
 
 ## Accesso Grafana e RustFS
 
-Dal Mac:
+Grafana è raggiungibile dalla LAN su **http://192.168.1.54:13000**, utente `admin`, password in `runtime/grafana.env` su Fuji. Il bind è limitato all’IP LAN di Fuji.
+
+La console RustFS resta sul loopback; dal Mac:
 
 ```sh
-ssh -N -L 3000:127.0.0.1:13000 -L 9001:127.0.0.1:9001 mika@192.168.1.54
+ssh -N -L 9001:127.0.0.1:9001 mika@192.168.1.54
 ```
 
-Grafana: http://localhost:3000, utente `admin`, password in `runtime/grafana.env` su Fuji. Console RustFS: http://localhost:9001, credenziali in `runtime/rustfs.env`. Il bucket Loki usa un account separato limitato al bucket `loki`; il client mc è solo uno strumento di inizializzazione, non un server MinIO.
+Console: http://localhost:9001, credenziali in `runtime/rustfs.env`. Il bucket Loki usa un account separato limitato al bucket `loki`; il client mc è solo uno strumento di inizializzazione.
+
+Il `docker-compose.yaml` principale contiene tutte le definizioni di Fuji, senza `extends`. `agents/compose.yaml` serve per l’installazione del solo Alloy su Ryzen. La cartella storage conserva gli script di bootstrap e la policy S3.
 
 ## Installazione iniziale
 

@@ -12,7 +12,7 @@ for name in ('config', 'storage'):
 subprocess.run([sys.executable, str(root/'scripts/bootstrap'), str(target/'runtime')], check=True)
 f=target/'runtime/loki.env'
 f.write_text(f.read_text().replace('10.20.0.1:19000','rustfs:9000'))
-s=(root/'docker-compose.yaml').read_text().split('# Fuji owns the backend')[0].replace('name: homelab-monitoring','name: homelab-rustfs-smoke').replace('127.0.0.1:13000:3000','127.0.0.1:13300:3000').replace('${MONITORING_BIND_IP:?set WireGuard address}:3100:8080','127.0.0.1:13311:8080').replace('  prometheus:\n','  prometheus:\n    ports: ["127.0.0.1:13909:9090"]\n',1).replace('  loki:\n','  loki:\n    ports: ["127.0.0.1:13310:3100"]\n',1)
+s=(root/'docker-compose.yaml').read_text().split('# Fuji owns the backend')[0].replace('name: homelab-monitoring','name: homelab-rustfs-smoke').replace('192.168.1.54:13000:3000','127.0.0.1:13300:3000').replace('${MONITORING_BIND_IP:?set WireGuard address}:3100:8080','127.0.0.1:13311:8080').replace('  prometheus:\n','  prometheus:\n    ports: ["127.0.0.1:13909:9090"]\n',1).replace('  loki:\n','  loki:\n    ports: ["127.0.0.1:13310:3100"]\n',1)
 # Map production host directories to isolated test volumes before adding test services.
 for name, destination in [('prometheus', '/prometheus'), ('loki', '/loki'), ('grafana', '/var/lib/grafana')]:
     block = f'      - type: bind\n        source: /srv/homelab-monitoring/{name}\n        target: {destination}\n        bind: {{create_host_path: false}}'
