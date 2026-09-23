@@ -25,3 +25,9 @@ Non ancora verificati: RAM/swap sotto carico su Fuji, journal e cAdvisor dei due
 ## Attivazione
 
 Checkout durevole salvato in `/Volumes/SSD/progetti/github/homelab-monitoring`; staging verificato su entrambi gli host in `/home/mika/homelab-monitoring-stage-20260923`, con segreti per ruolo e permessi directory 0700/file 0600. Eseguire `sudo bash /home/mika/homelab-monitoring-stage-20260923/scripts/install-host`, prima Fuji, poi Ryzen. `sudo -n` su Fuji richiede password: il test locale non supera questo requisito. Nessuna rinomina/archiviazione GitHub effettuata.
+
+## Revisione bind mount richiesta dall’utente
+
+Verifica SSH su entrambi gli host: dati applicativi centralizzati sotto `/srv`, applicazioni in `/opt/applications`; nessun container o volume nominato del nuovo stack presente. Backend e Alloy passano a bind mount `/srv/homelab-monitoring/{prometheus,loki,grafana,alloy}`; RustFS resta sul DAS. Installer aggiornato a `/opt/applications/homelab-monitoring`. UID verificati dalle immagini (Prometheus 65534, Grafana 472, Loki 10001); directory create esplicitamente, creazione automatica Compose disattivata.
+
+Validazioni native e generazione/validazione Compose dello smoke passate dopo la modifica. Il precedente collaudo S3 resta valido per l’integrazione; avvio e scrittura sui bind mount dei server richiedono ancora installazione root e collaudo live.

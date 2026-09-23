@@ -13,6 +13,12 @@ subprocess.run([sys.executable, str(root/'scripts/bootstrap'), str(target/'runti
 f=target/'runtime/loki.env'
 f.write_text(f.read_text().replace('10.20.0.1:9000','rustfs:9000'))
 s=(root/'docker-compose.yaml').read_text().replace('name: homelab-monitoring','name: homelab-rustfs-smoke').replace('127.0.0.1:3000:3000','127.0.0.1:13300:3000').replace('${MONITORING_BIND_IP:?set WireGuard address}:3100:8080','127.0.0.1:13311:8080').replace('  prometheus:\n','  prometheus:\n    ports: ["127.0.0.1:13909:9090"]\n',1).replace('  loki:\n','  loki:\n    ports: ["127.0.0.1:13310:3100"]\n',1)
+# Map production host directories to isolated test volumes before adding test services.
+for name, destination in [('prometheus', '/prometheus'), ('loki', '/loki'), ('grafana', '/var/lib/grafana')]:
+    block = f'      - type: bind\n        source: /srv/homelab-monitoring/{name}\n        target: {destination}\n        bind: {{create_host_path: false}}'
+    assert block in s, f'Missing production mount for {name}'
+    s = s.replace(block, f'      - {name}-data:{destination}')
+s += 'volumes:\n  prometheus-data:\n  grafana-data:\n  loki-data:\n'
 # Only the test uses tmpfs: keep Docker Desktop disk pressure out of WAL tests.
 s=s.replace('      - loki-data:/loki', '    tmpfs: ["/loki:uid=10001,gid=10001,size=536870912"]')
 s=s.replace('volumes:\n  prometheus-data:', '''  rustfs-permissions:

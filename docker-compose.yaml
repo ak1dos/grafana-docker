@@ -5,7 +5,10 @@ services:
     command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus", "--storage.tsdb.retention.time=15d", "--storage.tsdb.retention.size=8GB", "--web.enable-remote-write-receiver"]
     volumes:
       - ./config/prometheus:/etc/prometheus:ro
-      - prometheus-data:/prometheus
+      - type: bind
+        source: /srv/homelab-monitoring/prometheus
+        target: /prometheus
+        bind: {create_host_path: false}
     restart: unless-stopped
     mem_limit: 1g
     logging: &logging
@@ -17,7 +20,10 @@ services:
     env_file: ./runtime/loki.env
     volumes:
       - ./config/loki:/etc/loki:ro
-      - loki-data:/loki
+      - type: bind
+        source: /srv/homelab-monitoring/loki
+        target: /loki
+        bind: {create_host_path: false}
     restart: unless-stopped
     mem_limit: 1g
     logging: *logging
@@ -30,7 +36,10 @@ services:
       GF_AUTH_ANONYMOUS_ENABLED: "false"
       GF_ANALYTICS_REPORTING_ENABLED: "false"
     volumes:
-      - grafana-data:/var/lib/grafana
+      - type: bind
+        source: /srv/homelab-monitoring/grafana
+        target: /var/lib/grafana
+        bind: {create_host_path: false}
       - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./config/grafana/dashboards:/var/lib/grafana/dashboards:ro
     restart: unless-stopped
@@ -47,7 +56,3 @@ services:
     restart: unless-stopped
     mem_limit: 64m
     logging: *logging
-volumes:
-  prometheus-data:
-  grafana-data:
-  loki-data:

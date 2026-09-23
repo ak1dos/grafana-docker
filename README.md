@@ -11,6 +11,20 @@ Backend Grafana/Prometheus/Loki su Ryzen; RustFS sul DAS Fuji; Alloy indipendent
 - Alloy: Unix/cAdvisor integrati, metriche host/container e log Docker/journald. Container amministrativo privilegiato, UI solo loopback 12345; il socket Docker equivale a root anche se montato read-only.
 - Allarmi configurati e visibili in Prometheus; notifiche email/push e heartbeat esterno non configurati.
 
+## Directory host
+
+Tutti i servizi girano in Docker. I dati persistenti sono bind mount espliciti, secondo la convenzione dei server:
+
+| Host | Dati | Directory host |
+|---|---|---|
+| Ryzen | Prometheus | `/srv/homelab-monitoring/prometheus` |
+| Ryzen | Loki WAL, indice e cache | `/srv/homelab-monitoring/loki` |
+| Ryzen | Grafana | `/srv/homelab-monitoring/grafana` |
+| Entrambi | Alloy WAL e posizioni | `/srv/homelab-monitoring/alloy` |
+| Fuji | RustFS oggetti e log | `/tank/observability/rustfs/{data,logs}` |
+
+Manifest, configurazioni e segreti vengono installati in `/opt/applications/homelab-monitoring`. L’installer crea le directory dati con UID/GID delle immagini; `create_host_path: false` impedisce la creazione implicita di directory con proprietario errato. Se rileva volumi nominati del precedente layout si ferma, per richiedere una migrazione esplicita dei dati. Questi bind mount non aggiungono automaticamente copertura al backup.
+
 ## Preparare segreti
 
 ```sh
@@ -34,7 +48,7 @@ Dal checkout preparato, prima su Fuji e poi su Ryzen:
 sudo bash scripts/install-host
 ```
 
-Riconosce soltanto i due hostname, verifica dataset/mount, prepara sottodirectory UID 10001, copia configurazione root-owned in `/usr/local/lib/homelab-monitoring`, installa unità systemd e inizializza bucket/account RustFS. Se UFW è attivo autorizza S3 solo dal peer Ryzen su wg0. Non cancella volumi o dati preesistenti; non modifica la quota di un dataset già presente.
+Riconosce soltanto i due hostname, verifica dataset/mount, prepara sottodirectory UID 10001, copia configurazione root-owned in `/opt/applications/homelab-monitoring`, installa unità systemd e inizializza bucket/account RustFS. Se UFW è attivo autorizza S3 solo dal peer Ryzen su wg0. Non cancella volumi o dati preesistenti; non modifica la quota di un dataset già presente.
 
 RustFS non ha restart Docker autonomo: systemd attende mount ZFS e IP VPN prima dell’avvio. Il bootstrap S3 è ripetibile: crea l’utente solo se assente e conferma che le credenziali fornite funzionino. Un utente già esistente con password diversa produce errore, senza rotazione implicita. L’accesso Loki è limitato al bucket `loki`.
 

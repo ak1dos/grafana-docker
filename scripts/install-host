@@ -20,6 +20,20 @@ done
 command -v docker >/dev/null
 docker compose version >/dev/null
 [[ -f "$source_dir/runtime/agents/$node.env" ]] || { echo 'Missing host secrets.' >&2; exit 1; }
+# Refuse a silent switch from a previous named-volume deployment.
+for volume in homelab-monitoring_prometheus-data homelab-monitoring_loki-data homelab-monitoring_grafana-data homelab-telemetry_alloy-data; do
+  if docker volume inspect "$volume" >/dev/null 2>&1; then
+    echo "Existing volume $volume: migrate its data before installing bind mounts." >&2
+    exit 1
+  fi
+done
+install -d -m 0755 /srv/homelab-monitoring
+install -d -o 0 -g 0 -m 0700 /srv/homelab-monitoring/alloy
+if [[ $node == ryzen5lenovo ]]; then
+  install -d -o 65534 -g 65534 -m 0700 /srv/homelab-monitoring/prometheus
+  install -d -o 10001 -g 10001 -m 0700 /srv/homelab-monitoring/loki
+  install -d -o 472 -g 0 -m 0700 /srv/homelab-monitoring/grafana
+fi
 # Validate mount BEFORE creating any application directory on the DAS.
 if [[ $node == fujiserver ]]; then
   command -v zfs >/dev/null
@@ -34,7 +48,7 @@ if [[ $node == fujiserver ]]; then
   install -d -o 10001 -g 10001 -m 0700 /tank/observability/rustfs/data /tank/observability/rustfs/logs
 fi
 # An immutable root-owned runtime tree, separate from the editable Git checkout.
-dest=/usr/local/lib/homelab-monitoring
+dest=/opt/applications/homelab-monitoring
 install -d -m 0755 "$dest"
 for item in docker-compose.yaml config agents storage scripts; do
   cp -a "$source_dir/$item" "$dest/"
