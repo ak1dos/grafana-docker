@@ -17,7 +17,7 @@ groups:
         labels: {severity: warning}
         annotations: {summary: "Spazio disponibile inferiore al 15%"}
       - alert: ExporterScrapeFailed
-        expr: up{job=~"host|containers"} == 0
+        expr: up{job=~"integrations/(unix|cadvisor)"} == 0
         for: 5m
         labels: {severity: warning}
         annotations: {summary: "Raccolta metriche fallita"}

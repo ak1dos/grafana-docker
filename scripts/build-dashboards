@@ -1,0 +1,94 @@
+#!/usr/bin/env python3
+"""Generate the small provisioned dashboard set; queries are checked against live sources."""
+import json
+from pathlib import Path
+ROOT=Path(__file__).resolve().parents[1]
+OUT=ROOT/'config/grafana/dashboards'
+PROM={'type':'prometheus','uid':'prometheus'}
+LOKI={'type':'loki','uid':'loki'}
+LINKS=[{'title':t,'url':'/d/'+u,'type':'link','includeVars':True,'keepTime':True} for u,t in [('homelab-hosts','Server'),('homelab-containers','Container'),('homelab-logs','Log'),('homelab-valheim','Valheim')]]
+def variable(name,query,ds=PROM,default=None,multi=False):
+ return {'name':name,'label':name.capitalize(),'type':'query','datasource':ds,'query':query,'definition':query,'refresh':1,'sort':1,'multi':multi,'includeAll':multi,'allValue':'.*' if multi else None,'current':{'text':default or 'All','value':default or '$__all'}}
+host=variable('host','label_values(node_uname_info, host)',default='fujiserver')
+container=variable('container','label_values(container_memory_working_set_bytes{host="$host",name!=""}, name)',multi=True)
+search={'name':'search','label':'Testo nei log','type':'textbox','query':'','current':{'text':'','value':''}}
+def dashboard(uid,title,variables):
+ return {'uid':uid,'title':title,'schemaVersion':39,'version':2,'tags':['homelab'],'editable':False,'timezone':'browser','refresh':'30s','time':{'from':'now-3h','to':'now'},'links':LINKS,'templating':{'list':variables},'panels':[]}
+def panel(d,title,expr,unit='short',kind='timeseries',x=0,y=0,w=12,h=8,ds=PROM,legend='',description='',maxval=None):
+ p={'id':len(d['panels'])+1,'title':title,'type':kind,'datasource':ds,'description':description,'gridPos':{'x':x,'y':y,'w':w,'h':h},'targets':[{'refId':'A','expr':expr,'legendFormat':legend,'instant':kind in ['stat','bargauge'],'range':kind not in ['stat','bargauge']}], 'fieldConfig':{'defaults':{'unit':unit,'decimals':1,'min':0,'noValue':'N/D','color':{'mode':'palette-classic'}},'overrides':[]},'options':{'legend':{'displayMode':'table','placement':'bottom','calcs':['lastNotNull','max']},'tooltip':{'mode':'multi','sort':'desc'}}}
+ if maxval is not None:p['fieldConfig']['defaults']['max']=maxval
+ if kind in ['stat','bargauge']:
+  p['options']={'reduceOptions':{'calcs':['lastNotNull'],'fields':'','values':False},'orientation':'horizontal','colorMode':'value','graphMode':'none','displayMode':'basic','textMode':'auto'}
+ if kind=='logs':
+  p['targets'][0]={'refId':'A','expr':expr,'queryType':'range'}
+  p['options']={'showTime':True,'showLabels':False,'showCommonLabels':False,'wrapLogMessage':True,'prettifyLogMessage':True,'enableLogDetails':True,'dedupStrategy':'none','sortOrder':'Descending'}
+ d['panels'].append(p);return p
+
+def text(d,title,body,y=0,h=3):
+ d['panels'].append({'id':len(d['panels'])+1,'title':title,'type':'text','gridPos':{'x':0,'y':y,'w':24,'h':h},'options':{'mode':'markdown','content':body}})
+def save(d,name): (OUT/name).write_text(json.dumps(d,indent=2,ensure_ascii=False)+'\n')
+H='host="$host"'
+cpu=f'100 * (1 - avg(rate(node_cpu_seconds_total{{{H},mode="idle"}}[$__rate_interval])))'
+ram=f'100 * (1 - node_memory_MemAvailable_bytes{{{H}}} / node_memory_MemTotal_bytes{{{H}}})'
+d=dashboard('homelab-hosts','Server — risorse e capacità',[host])
+text(d,'Come leggere i dati','Seleziona un server. CPU normalizzata su tutti i core; RAM usata = totale − disponibile, non totale − libera. Filesystem ZFS mostrati separatamente: non sommare lo spazio condiviso dei dataset.')
+for i,(t,e,u,m) in enumerate([('CPU occupata',cpu,'percent',100),('RAM occupata',ram,'percent',100),('RAM disponibile',f'node_memory_MemAvailable_bytes{{{H}}}','bytes',None),('Swap usata',f'node_memory_SwapTotal_bytes{{{H}}}-node_memory_SwapFree_bytes{{{H}}}','bytes',None)]):panel(d,t,e,u,'stat',x=i*6,y=3,w=6,h=4,maxval=m)
+panel(d,'CPU occupata nel tempo',cpu,'percent',y=7,maxval=100)
+panel(d,'RAM occupata / disponibile',f'node_memory_MemTotal_bytes{{{H}}}-node_memory_MemAvailable_bytes{{{H}}}','bytes',x=12,y=7,legend='Usata (totale − disponibile)')['targets'].append({'refId':'B','expr':f'node_memory_MemAvailable_bytes{{{H}}}','legendFormat':'Disponibile'})
+FS=f'{H},fstype=~"ext4|xfs|btrfs|zfs|vfat",mountpoint!~"/run.*|/var/lib/docker.*"'
+panel(d,'Filesystem — spazio occupato',f'100 * (1 - node_filesystem_avail_bytes{{{FS}}}/node_filesystem_size_bytes{{{FS}}})','percent','bargauge',y=15,legend='{{mountpoint}}',maxval=100)
+panel(d,'Filesystem — spazio disponibile',f'node_filesystem_avail_bytes{{{FS}}}','bytes','bargauge',x=12,y=15,legend='{{mountpoint}}')
+panel(d,'Dischi — letture e scritture',f'rate(node_disk_read_bytes_total{{{H},device!~"loop.*|dm-.*"}}[$__rate_interval])','Bps',y=23,legend='{{device}} lettura')['targets'].append({'refId':'B','expr':f'rate(node_disk_written_bytes_total{{{H},device!~"loop.*|dm-.*"}}[$__rate_interval])','legendFormat':'{{device}} scrittura'})
+panel(d,'Rete — ricezione e trasmissione',f'rate(node_network_receive_bytes_total{{{H},device=~"en.*|eth.*|wg.*"}}[$__rate_interval])','Bps',x=12,y=23,legend='{{device}} RX')['targets'].append({'refId':'B','expr':f'rate(node_network_transmit_bytes_total{{{H},device=~"en.*|eth.*|wg.*"}}[$__rate_interval])','legendFormat':'{{device}} TX'})
+panel(d,'Pressione memoria (tempo in attesa)',f'100 * rate(node_pressure_memory_waiting_seconds_total{{{H}}}[$__rate_interval])','percent',y=31,maxval=100)
+panel(d,'Uptime host',f'time()-node_boot_time_seconds{{{H}}}','s','stat',x=12,y=31)
+save(d,'hosts.json')
+
+C=H+',name=~"$container",name!=""'
+mem=f'max by(name) (container_memory_working_set_bytes{{{C}}})'
+cores=f'sum by(name) (rate(container_cpu_usage_seconds_total{{{C}}}[$__rate_interval]))'
+limit=f'max by(name) (container_spec_memory_limit_bytes{{{C}}})'
+d=dashboard('homelab-containers','Container — consumi e limiti',[host,container])
+text(d,'Unità e limiti','CPU in core: 1 equivale a un core pieno, 2 a due core. Memoria = working set, simile al valore Docker Stats, distinta dalla RAM dell’host. Il limite cgroup dei container senza limite esplicito può coincidere con la memoria dell’host; non è una prenotazione.')
+panel(d,'CPU per container (core)',cores,'short',y=3,legend='{{name}}')
+panel(d,'Memoria working set',mem,'bytes',x=12,y=3,legend='{{name}}')
+panel(d,'Top 10 — CPU (core)',f'topk(10,{cores})','short','bargauge',y=11,legend='{{name}}')
+panel(d,'Top 10 — RAM',f'topk(10,{mem})','bytes','bargauge',x=12,y=11,legend='{{name}}')
+panel(d,'Memoria / limite cgroup',f'100 * {mem} / ({limit} > 0)','percent','bargauge',y=19,legend='{{name}}',maxval=100)
+panel(d,'Limite memoria cgroup',limit,'bytes','bargauge',x=12,y=19,legend='{{name}}')
+panel(d,'Container — uptime',f'time() - max by(name) (container_start_time_seconds{{{C}}})','s','bargauge',y=27,legend='{{name}}')
+panel(d,'Raccolta cAdvisor',f'up{{{H},job="integrations/cadvisor"}}','short','stat',x=12,y=27)
+save(d,'containers.json')
+
+lc=variable('container','label_values({host="$host",job="docker"}, container)',LOKI,multi=True)
+lu=variable('unit','label_values({host="$host",job=~"journal|loki.source.journal.system"}, unit)',LOKI,multi=True)
+d=dashboard('homelab-logs','Log — ricerca e diagnostica',[host,lc,lu,search])
+text(d,'Ricerca','Docker e journal sono separati. Filtra host, container o unità e cerca testo. I log restano consultabili integralmente; la raccolta rimuove colori ANSI e prefissi ridondanti di Valheim, senza scartare errori o righe diagnostiche.')
+L='{host="$host",job="docker",container=~"$container"}'
+J='{host="$host",job=~"journal|loki.source.journal.system",unit=~"$unit"}'
+panel(d,'Volume log Docker',f'sum by(container) (count_over_time({L}[1m]))','short',y=3,ds=LOKI,legend='{{container}}')
+panel(d,'Righe con errori / warning',f'sum by(container) (count_over_time({L} |~ "(?i)error|exception|fatal|warn" [1m]))','short',x=12,y=3,ds=LOKI,legend='{{container}}')
+panel(d,'Log Docker',L+' |= ${search:doublequote}',kind='logs',y=11,w=24,h=12,ds=LOKI)
+panel(d,'Journal — servizi di sistema',J+' |= ${search:doublequote}',kind='logs',y=23,w=24,h=12,ds=LOKI)
+save(d,'logs.json')
+
+V='{host="ryzen5lenovo",container="valheim-server"}'
+count=V+' | regexp "Connections (?P<players>[0-9]+) ZDOS:" | unwrap players | __error__=""'
+players='max(last_over_time('+count+' [15m]))'
+age='1000 * max(last_over_time('+V+' |= "Connections " | label_format observed="{{ __timestamp__ | unixEpoch }}" | unwrap observed | __error__="" [15m]))'
+VC='host="ryzen5lenovo",name="valheim-server"'
+d=dashboard('homelab-valheim','Valheim — giocatori, risorse e log',[])
+text(d,'Giocatori: fonte e attendibilità','Conteggio nativo «Connections» dai log del server crossplay, emesso circa ogni **10 minuti**: è l’ultima osservazione, non un contatore in tempo reale. Dopo 15 minuti senza campioni mostra N/D. I nomi dei giocatori non sono forniti da questo segnale. Nessuna modifica al gioco o riavvio del server Valheim.',h=4)
+for i,(t,e,u,ds) in enumerate([('Giocatori — ultima rilevazione',players,'short',LOKI),('Ultima rilevazione giocatori',age,'dateTimeFromNow',LOKI),('CPU Valheim (core)',f'sum(rate(container_cpu_usage_seconds_total{{{VC}}}[$__rate_interval]))','short',PROM),('RAM Valheim',f'max(container_memory_working_set_bytes{{{VC}}})','bytes',PROM)]):panel(d,t,e,u,'stat',x=i*6,y=4,w=6,h=4,ds=ds)
+panel(d,'Giocatori — storico delle rilevazioni',players,'short',y=8,ds=LOKI,description='Finestra di validità 15 minuti; dati vecchi non sostituiti da zero.')
+panel(d,'RAM e limite container',f'max(container_memory_working_set_bytes{{{VC}}})','bytes',x=12,y=8,legend='Working set')['targets'].append({'refId':'B','expr':f'max(container_spec_memory_limit_bytes{{{VC}}})','legendFormat':'Limite'})
+panel(d,'CPU Valheim (core)',f'sum(rate(container_cpu_usage_seconds_total{{{VC}}}[$__rate_interval]))','short',y=16)
+panel(d,'Uptime container',f'time()-max(container_start_time_seconds{{{VC}}})','s','stat',x=12,y=16)
+panel(d,'Eventi — connessioni e salvataggi',V+' |~ "(?i)Got character|ZDOID|Connections [0-9]+|new connection|disconnect|world.*sav|world.*backup|server.*start"',kind='logs',y=24,w=24,h=9,ds=LOKI)
+panel(d,'Errori e warning',V+' |~ "(?i)error|exception|fatal|warn"',kind='logs',y=33,w=24,h=8,ds=LOKI)
+panel(d,'Diagnostica completa — prefissi ripuliti',V,kind='logs',y=41,w=24,h=10,ds=LOKI)
+save(d,'valheim.json')
+d=dashboard('homelab-overview','Homelab — navigazione',[])
+text(d,'Dashboard operative','Scegli una vista dedicata:\n\n- [Server: CPU, RAM, swap, filesystem e rete](/d/homelab-hosts)\n- [Container: consumi e limiti](/d/homelab-containers)\n- [Log: filtri e ricerca](/d/homelab-logs)\n- [Valheim: giocatori, risorse, eventi e diagnostica](/d/homelab-valheim)',h=8)
+save(d,'homelab.json')
+print('Generated 4 operational dashboards and navigation page')

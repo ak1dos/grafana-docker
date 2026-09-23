@@ -64,10 +64,28 @@ discovery.relabel "containers" {
 loki.source.docker "containers" {
   host = "unix:///var/run/docker.sock"
   targets = discovery.relabel.containers.output
+  forward_to = [loki.process.docker.receiver]
+}
+// Preserve every log line; normalize presentation only.
+loki.process "docker" {
   forward_to = [loki.write.central.receiver]
+  stage.decolorize {}
+  stage.match {
+    selector = "{container=\"valheim-server\"}"
+    stage.regex {
+      expression = "^[A-Z][a-z]{2} +[0-9]+ [0-9:]+ supervisord: [^ ]+ (?:[0-9/]+ [0-9:]+: +)?(?P<message>.*)$"
+    }
+    stage.output {
+      source = "message"
+    }
+  }
 }
 loki.relabel "journal" {
   forward_to = []
+  rule {
+    target_label = "job"
+    replacement = "journal"
+  }
   rule {
     source_labels = ["__journal__systemd_unit"]
     target_label = "unit"

@@ -69,3 +69,14 @@ docker compose up -d
 `bash scripts/validate`: bootstrap, sintassi shell, Compose, promtool, Loki, Alloy, nginx. `scripts/prepare-smoke` crea un ambiente locale separato con segreti e volumi di test; `check-smoke` e `check-s3-recovery` verificano integrazione e lettura S3.
 
 Verificare entrambe le etichette host in Prometheus, log Docker/journald in Loki, salute datasource Grafana e memoria/swap/OOM su Fuji. Alloy è privilegiato per le metriche host/container e l’accesso ai log. Gli alert sono definiti in Prometheus; notifiche push/email non configurate. Collaudo reboot/DAS assente e retention prolungata richiedono prove dedicate.
+
+## Dashboard
+
+- [Server](http://192.168.1.54:13000/d/homelab-hosts): risorse, capacità e pressione, con selezione host.
+- [Container](http://192.168.1.54:13000/d/homelab-containers): CPU in core, RAM working set, limiti e uptime.
+- [Log](http://192.168.1.54:13000/d/homelab-logs): Docker e journal separati, filtri e ricerca.
+- [Valheim](http://192.168.1.54:13000/d/homelab-valheim): ultima rilevazione giocatori, risorse ed eventi/log.
+
+Il conteggio Valheim deriva dai log nativi crossplay ogni circa 10 minuti, con timestamp visibile e scadenza dopo 15 minuti: non è un conteggio in tempo reale. Non espone nomi dei giocatori. Le righe diagnostiche vengono conservate; la raccolta rimuove colori e prefissi ridondanti.
+
+Rigenerazione: `python3 scripts/build-dashboards`. Verifica query live: `python3 scripts/check-dashboard-queries` (usa le credenziali private locali senza stamparle). [Valutazione marketplace e prove](docs/dashboard-assessment-2026-09-23.md).

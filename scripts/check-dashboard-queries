@@ -1,0 +1,29 @@
+#!/usr/bin/env python3
+"""Validate provisioned query syntax and data availability against LAN Grafana; no log contents printed."""
+import base64,json,urllib.parse,urllib.request,urllib.error
+from pathlib import Path
+root=Path(__file__).resolve().parents[1]
+pw=dict(x.split('=',1) for x in (root/'runtime/grafana.env').read_text().splitlines())['GF_SECURITY_ADMIN_PASSWORD']
+auth='Basic '+base64.b64encode(('admin:'+pw).encode()).decode()
+errors=[];empty=[];passed=0
+for f in sorted((root/'config/grafana/dashboards').glob('*.json')):
+ d=json.loads(f.read_text())
+ for p in d['panels']:
+  for t in p.get('targets',[]):
+   q=t['expr']
+   for a,b in [('${search:doublequote}','""'),('$__rate_interval','5m'),('$host','fujiserver'),('$container','.*'),('$unit','.*')]:q=q.replace(a,b)
+   ds=p['datasource']['uid'];logs=p['type']=='logs'
+   path='/api/v1/query' if ds=='prometheus' else '/loki/api/v1/'+('query_range' if logs else 'query')
+   params={'query':q}
+   if logs:params.update({'since':'1h','limit':'1'})
+   url='http://192.168.1.54:13000/api/datasources/proxy/uid/'+ds+path+'?'+urllib.parse.urlencode(params)
+   try:
+    with urllib.request.urlopen(urllib.request.Request(url,headers={'Authorization':auth}),timeout=30) as resp:data=json.load(resp)
+    assert data['status']=='success'
+    passed+=1
+    if not data['data']['result']:empty.append(d['title']+' / '+p['title'])
+   except urllib.error.HTTPError as e:errors.append((d['title'],p['title'],e.code,e.read().decode()[:500]))
+print('Queries successful:',passed)
+print('Empty (may be legitimate):',json.dumps(empty,ensure_ascii=False))
+print('Errors:',json.dumps(errors,ensure_ascii=False))
+raise SystemExit(bool(errors))
