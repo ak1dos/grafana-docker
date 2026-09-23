@@ -1,0 +1,47 @@
+#!/bin/sh
+# Explicitly destructive, only with dedicated project-directory bind mounts.
+set -eu
+[ "${1:-}" = --reset-monitoring ] || exit 2
+node=$2
+operator_uid=$3
+operator_gid=$4
+case "$node" in fujiserver|ryzen5lenovo) ;; *) exit 2 ;; esac
+[ -f /source/scripts/install-host ] && [ -f /source/runtime/agents/$node.env ]
+if [ "$node" = fujiserver ]; then
+  awk '$5 == "/objectroot" && / - zfs tank\/observability / {found=1} END {exit !found}' /proc/self/mountinfo
+  for file in rustfs.env loki.env grafana.env ingest.htpasswd; do test -s "/source/runtime/$file"; done
+fi
+# Only these project bind mounts are writable in this temporary container.
+find /install -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+find /state -mindepth 1 -maxdepth 1 -exec rm -rf -- {} +
+mkdir -p /state/alloy /install/agents /install/scripts /install/runtime
+chmod 0700 /state/alloy /install/runtime
+cp -R /source/agents/. /install/agents/
+cp -R /source/scripts/. /install/scripts/
+cp /source/README.md /install/README.md
+cp "/source/runtime/agents/$node.env" /install/runtime/agent.env
+if [ "$node" = fujiserver ]; then
+  mkdir -p /state/prometheus /state/grafana /state/loki
+  chown 65534:65534 /state/prometheus
+  chown 472:0 /state/grafana
+  chown 10001:10001 /state/loki
+  chmod 0700 /state/prometheus /state/grafana /state/loki
+  # Reset RustFS only, retain the ZFS dataset and quota.
+  rm -rf /objectroot/rustfs
+  mkdir -p /objectroot/rustfs/data /objectroot/rustfs/logs
+  chown 10001:10001 /objectroot/rustfs/data /objectroot/rustfs/logs
+  chmod 0700 /objectroot/rustfs /objectroot/rustfs/data /objectroot/rustfs/logs
+  cp /source/docker-compose.yaml /install/docker-compose.yaml
+  cp -R /source/config /source/storage /install/
+  for file in rustfs.env loki.env grafana.env ingest.htpasswd; do cp "/source/runtime/$file" "/install/runtime/$file"; done
+  printf 'MONITORING_BIND_IP=10.20.0.1\n' > /install/.env
+else
+  sed -e 's#./config.alloy:#./agents/config.alloy:#' -e 's#../runtime/agent.env#./runtime/agent.env#' /source/agents/compose.yaml > /install/docker-compose.yaml
+fi
+find /install -type d -exec chmod 0755 {} +
+find /install -type f -exec chmod 0644 {} +
+find /install/scripts -type f -exec chmod 0755 {} +
+chown -R "$operator_uid:$operator_gid" /install/runtime
+chmod 0700 /install/runtime
+find /install/runtime -type f -exec chmod 0600 {} +
+printf 'Clean project prepared for %s\n' "$node"

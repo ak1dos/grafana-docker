@@ -20,14 +20,14 @@ def generate(target):
     admin_secret = secrets.token_hex(32)
     rpc_secret = secrets.token_hex(32)
     write("rustfs.env", f"RUSTFS_ACCESS_KEY={admin_key}\nRUSTFS_SECRET_KEY={admin_secret}\nRUSTFS_RPC_SECRET={rpc_secret}\n")
-    write("loki.env", f"S3_ENDPOINT=10.20.0.1:19000\nS3_REGION=us-east-1\nS3_ACCESS_KEY={key}\nS3_SECRET_KEY={secret}\n")
+    write("loki.env", f"S3_ENDPOINT=rustfs:9000\nS3_REGION=us-east-1\nS3_ACCESS_KEY={key}\nS3_SECRET_KEY={secret}\n")
     write("grafana.env", "GF_SECURITY_ADMIN_PASSWORD=" + secrets.token_urlsafe(32) + "\n")
     passwd = []
     for host in ("fujiserver", "ryzen5lenovo"):
         password = secrets.token_urlsafe(32)
         hashed = subprocess.run(["openssl", "passwd", "-apr1", "-stdin"], input=password + "\n", text=True, capture_output=True, check=True).stdout.strip()
         passwd.append(host + ":" + hashed)
-        write("agents/" + host + ".env", f"HOST_LABEL={host}\nINGEST_URL=http://10.20.0.5:3100\nINGEST_USER={host}\nINGEST_PASSWORD={password}\n")
+        write("agents/" + host + ".env", f"HOST_LABEL={host}\nINGEST_URL=http://10.20.0.1:3100\nINGEST_USER={host}\nINGEST_PASSWORD={password}\n")
     write("ingest.htpasswd", "\n".join(passwd) + "\n")
 
 

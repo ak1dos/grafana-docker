@@ -12,6 +12,7 @@ runuser -u "$operator" -- docker info --format '{{.ServerVersion}}' >/dev/null
 chmod 0755 "$dest"
 chmod 0644 "$dest/docker-compose.yaml"
 for directory in agents config storage scripts; do
+  [[ -d "$dest/$directory" ]] || continue
   find "$dest/$directory" -type d -exec chmod 0755 {} +
   find "$dest/$directory" -type f -exec chmod 0644 {} +
 done
@@ -25,8 +26,5 @@ find "$dest/runtime" -type d -exec chmod 0700 {} +
 find "$dest/runtime" -type f -exec chmod 0600 {} +
 cd "$dest"
 runuser -u "$operator" -- docker compose -f agents/compose.yaml config -q
-case "$(hostname -s)" in
-  fujiserver) runuser -u "$operator" -- docker compose -f storage/compose.yaml config -q ;;
-  ryzen5lenovo) runuser -u "$operator" -- docker compose config -q ;;
-esac
+runuser -u "$operator" -- docker compose config -q
 printf 'Compose ready without sudo for %s in %s\n' "$operator" "$dest"

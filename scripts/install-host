@@ -10,9 +10,9 @@ case "$node" in
   *) echo "Unsupported host: $node" >&2; exit 1 ;;
 esac
 if [[ $node == fujiserver ]]; then
-  required_files=(rustfs.env loki.env)
+  required_files=(rustfs.env loki.env grafana.env ingest.htpasswd)
 else
-  required_files=(loki.env grafana.env ingest.htpasswd)
+  required_files=()
 fi
 for file in "${required_files[@]}"; do
   [[ -s "$source_dir/runtime/$file" ]] || { echo "Missing runtime/$file" >&2; exit 1; }
@@ -29,7 +29,7 @@ for volume in homelab-monitoring_prometheus-data homelab-monitoring_loki-data ho
 done
 install -d -m 0755 /srv/homelab-monitoring
 install -d -o 0 -g 0 -m 0700 /srv/homelab-monitoring/alloy
-if [[ $node == ryzen5lenovo ]]; then
+if [[ $node == fujiserver ]]; then
   install -d -o 65534 -g 65534 -m 0700 /srv/homelab-monitoring/prometheus
   install -d -o 10001 -g 10001 -m 0700 /srv/homelab-monitoring/loki
   install -d -o 472 -g 0 -m 0700 /srv/homelab-monitoring/grafana
@@ -56,42 +56,29 @@ done
 install -d -m 0700 "$dest/runtime"
 install -m 0600 "$source_dir/runtime/agents/$node.env" "$dest/runtime/agent.env"
 if [[ $node == fujiserver ]]; then
-  for file in rustfs.env loki.env; do
+  for file in rustfs.env loki.env grafana.env ingest.htpasswd; do
     install -m 0600 "$source_dir/runtime/$file" "$dest/runtime/$file"
   done
+  printf 'MONITORING_BIND_IP=10.20.0.1\n' > "$dest/.env"
+  sed -i 's/^S3_ENDPOINT=.*/S3_ENDPOINT=rustfs:9000/' "$dest/runtime/loki.env"
 else
-  for file in loki.env grafana.env ingest.htpasswd; do
-    install -m 0600 "$source_dir/runtime/$file" "$dest/runtime/$file"
-  done
-  printf 'MONITORING_BIND_IP=%s\n' "$vpn_ip" > "$dest/.env"
+  sed -e 's#./config.alloy:#./agents/config.alloy:#' -e 's#../runtime/agent.env#./runtime/agent.env#' "$dest/agents/compose.yaml" > "$dest/docker-compose.yaml"
 fi
-# Normalize the endpoint in existing credentials without rotating any secret.
-sed -i 's/^S3_ENDPOINT=10\.20\.0\.1:9000$/S3_ENDPOINT=10.20.0.1:19000/' "$dest/runtime/loki.env"
+sed -i 's#^INGEST_URL=.*#INGEST_URL=http://10.20.0.1:3100#' "$dest/runtime/agent.env"
 chown -R root:root "$dest"
 chmod 0755 "$dest/scripts/"*
 bash "$dest/scripts/setup-compose-access"
 cd "$dest"
-docker compose -f agents/compose.yaml config -q
-if [[ $node == fujiserver ]]; then
-  docker compose -f storage/compose.yaml config -q
-  # Host-networked S3 follows INPUT firewall rules; no Docker port forwarding.
-  if command -v ufw >/dev/null && ufw status | head -1 | grep -q 'Status: active'; then
-    ufw allow in on wg0 from 10.20.0.5 to 10.20.0.1 port 19000 proto tcp comment homelab-s3
-  fi
-else
-  docker compose config -q
-fi
+docker compose config -q
 # Retire the old supervisors before handing lifecycle ownership to Docker.
 for unit in homelab-object-storage homelab-monitoring homelab-telemetry; do
   if [[ -f /etc/systemd/system/$unit.service ]]; then
     systemctl disable --now "$unit.service"
   fi
 done
-docker compose -f agents/compose.yaml up -d
 if [[ $node == fujiserver ]]; then
-  docker compose -f storage/compose.yaml up -d --wait --wait-timeout 180 rustfs
-  docker compose -f storage/compose.yaml --profile bootstrap run --rm init
-else
-  docker compose up -d
+  docker compose up -d --wait --wait-timeout 180 rustfs
+  docker compose --profile bootstrap run --rm init
 fi
+docker compose up -d
 printf 'Installed on %s. Manage services with docker compose from %s.\n' "$node" "$dest"

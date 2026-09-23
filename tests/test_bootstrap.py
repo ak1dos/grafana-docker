@@ -20,7 +20,7 @@ class BootstrapTest(unittest.TestCase):
             self.assertNotEqual(admin["RUSTFS_SECRET_KEY"], app["S3_SECRET_KEY"])
             self.assertNotEqual(admin["RUSTFS_RPC_SECRET"], admin["RUSTFS_SECRET_KEY"])
             self.assertEqual(app["S3_REGION"], "us-east-1")
-            self.assertEqual(app["S3_ENDPOINT"], "10.20.0.1:19000")
+            self.assertEqual(app["S3_ENDPOINT"], "rustfs:9000")
             self.assertIn(pathlib.Path("agents/fujiserver.env"), list(files))
             for p in target.rglob("*"):
                 if p.is_file():

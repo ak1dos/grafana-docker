@@ -5,7 +5,7 @@ repo_dir=$PWD
 python3 -m unittest discover -s tests -v
 bash -n scripts/install-host scripts/wait-vpn scripts/setup-compose-access
 sh -n storage/init.sh storage/start-rustfs.sh
-MONITORING_BIND_IP=10.20.0.5 docker compose config -q
+MONITORING_BIND_IP=10.20.0.1 docker compose config -q
 docker compose -f storage/compose.yaml config -q
 docker compose -f agents/compose.yaml config -q
 docker run --rm -v "$repo_dir/config/prometheus:/etc/prometheus:ro" --entrypoint promtool prom/prometheus:v3.14.0 check config /etc/prometheus/prometheus.yml
