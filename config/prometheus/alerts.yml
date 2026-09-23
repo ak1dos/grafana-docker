@@ -1,0 +1,23 @@
+groups:
+  - name: homelab
+    rules:
+      - alert: HostMetricsMissing
+        expr: absent_over_time(node_uname_info{host="fujiserver"}[5m]) or absent_over_time(node_uname_info{host="ryzen5lenovo"}[5m])
+        for: 2m
+        labels: {severity: critical}
+        annotations: {summary: "Metriche host assenti da almeno cinque minuti"}
+      - alert: HostMemoryLow
+        expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 0.1
+        for: 10m
+        labels: {severity: warning}
+        annotations: {summary: "RAM disponibile inferiore al 10%"}
+      - alert: HostDiskSpaceLow
+        expr: node_filesystem_avail_bytes{fstype!~"tmpfs|overlay",mountpoint!~"/run.*"} / node_filesystem_size_bytes < 0.15
+        for: 10m
+        labels: {severity: warning}
+        annotations: {summary: "Spazio disponibile inferiore al 15%"}
+      - alert: ExporterScrapeFailed
+        expr: up{job=~"host|containers"} == 0
+        for: 5m
+        labels: {severity: warning}
+        annotations: {summary: "Raccolta metriche fallita"}

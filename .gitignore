@@ -1,1 +1,5 @@
-config/promtail/positions
+runtime/
+.env
+*.env
+!*.env.example
+__pycache__/

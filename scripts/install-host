@@ -1,0 +1,132 @@
+#!/bin/bash
+# Run on the intended Linux host, as root, from the reviewed checkout.
+set -euo pipefail
+[[ $EUID -eq 0 ]] || { echo 'Run with sudo on the target host.' >&2; exit 1; }
+source_dir=$(cd -- "$(dirname -- "$0")/.." && pwd)
+node=$(hostname -s)
+case "$node" in
+  fujiserver) vpn_ip=10.20.0.1 ;;
+  ryzen5lenovo) vpn_ip=10.20.0.5 ;;
+  *) echo "Unsupported host: $node" >&2; exit 1 ;;
+esac
+if [[ $node == fujiserver ]]; then
+  required_files=(rustfs.env loki.env)
+else
+  required_files=(loki.env grafana.env ingest.htpasswd)
+fi
+for file in "${required_files[@]}"; do
+  [[ -s "$source_dir/runtime/$file" ]] || { echo "Missing runtime/$file" >&2; exit 1; }
+done
+command -v docker >/dev/null
+docker compose version >/dev/null
+[[ -f "$source_dir/runtime/agents/$node.env" ]] || { echo 'Missing host secrets.' >&2; exit 1; }
+# Validate mount BEFORE creating any application directory on the DAS.
+if [[ $node == fujiserver ]]; then
+  command -v zfs >/dev/null
+  zpool list tank >/dev/null
+  if ! zfs list tank/observability >/dev/null 2>&1; then
+    [[ ! -e /tank/observability ]] || { echo 'Unmanaged path /tank/observability exists; inspect manually.' >&2; exit 1; }
+    zfs create -o mountpoint=/tank/observability -o quota=128G -o compression=lz4 -o atime=off tank/observability
+  fi
+  [[ $(findmnt -n -o SOURCE --target /tank/observability) == tank/observability ]] || { echo 'Dataset not mounted at expected path.' >&2; exit 1; }
+  [[ $(zfs get -H -o value quota tank/observability) != none ]] || { echo 'Set a reviewed dataset quota first.' >&2; exit 1; }
+  install -d -m 0700 /tank/observability/rustfs
+  install -d -o 10001 -g 10001 -m 0700 /tank/observability/rustfs/data /tank/observability/rustfs/logs
+fi
+# An immutable root-owned runtime tree, separate from the editable Git checkout.
+dest=/usr/local/lib/homelab-monitoring
+install -d -m 0755 "$dest"
+for item in docker-compose.yaml config agents storage scripts; do
+  cp -a "$source_dir/$item" "$dest/"
+done
+install -d -m 0700 "$dest/runtime"
+install -m 0600 "$source_dir/runtime/agents/$node.env" "$dest/runtime/agent.env"
+if [[ $node == fujiserver ]]; then
+  for file in rustfs.env loki.env; do
+    install -m 0600 "$source_dir/runtime/$file" "$dest/runtime/$file"
+  done
+else
+  for file in loki.env grafana.env ingest.htpasswd; do
+    install -m 0600 "$source_dir/runtime/$file" "$dest/runtime/$file"
+  done
+  printf 'MONITORING_BIND_IP=%s\n' "$vpn_ip" > "$dest/.env"
+fi
+chown -R root:root "$dest"
+chmod 0755 "$dest/scripts/"*
+cd "$dest"
+docker compose -f agents/compose.yaml config -q
+if [[ $node == fujiserver ]]; then
+  docker compose -f storage/compose.yaml config -q
+  # Host-networked S3 follows INPUT firewall rules; no Docker port forwarding.
+  if command -v ufw >/dev/null && ufw status | head -1 | grep -q 'Status: active'; then
+    ufw allow in on wg0 from 10.20.0.5 to 10.20.0.1 port 9000 proto tcp comment homelab-s3
+  fi
+else
+  docker compose config -q
+fi
+cat > /etc/systemd/system/homelab-telemetry.service <<EOF
+[Unit]
+Description=Homelab Alloy host metrics and logs
+Requires=docker.service
+After=docker.service network-online.target
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=$dest
+ExecStart=/usr/bin/docker compose -f agents/compose.yaml up -d
+ExecStop=/usr/bin/docker compose -f agents/compose.yaml stop
+TimeoutStartSec=300
+[Install]
+WantedBy=multi-user.target
+EOF
+if [[ $node == fujiserver ]]; then
+  cat > /etc/systemd/system/homelab-object-storage.service <<EOF
+[Unit]
+Description=RustFS S3 on the homelab DAS
+Requires=docker.service
+After=docker.service network-online.target
+RequiresMountsFor=/tank/observability
+[Service]
+Type=simple
+WorkingDirectory=$dest
+ExecStartPre=/usr/bin/mountpoint -q /tank/observability
+ExecStartPre=$dest/scripts/wait-vpn 10.20.0.1
+ExecStart=/usr/bin/docker compose -f storage/compose.yaml up --abort-on-container-exit --exit-code-from rustfs
+ExecStop=/usr/bin/docker compose -f storage/compose.yaml stop
+Restart=always
+RestartSec=15
+TimeoutStartSec=90
+TimeoutStopSec=120
+[Install]
+WantedBy=multi-user.target
+EOF
+else
+  cat > /etc/systemd/system/homelab-monitoring.service <<EOF
+[Unit]
+Description=Grafana Prometheus Loki and ingestion gateway
+Requires=docker.service
+After=docker.service network-online.target wg-quick@wg0.service
+StartLimitIntervalSec=0
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+WorkingDirectory=$dest
+Restart=on-failure
+RestartSec=15
+ExecStartPre=$dest/scripts/wait-vpn 10.20.0.5
+ExecStart=/usr/bin/docker compose up -d
+ExecStop=/usr/bin/docker compose stop
+TimeoutStartSec=300
+[Install]
+WantedBy=multi-user.target
+EOF
+fi
+systemctl daemon-reload
+systemctl enable --now homelab-telemetry.service
+if [[ $node == fujiserver ]]; then
+  systemctl enable --now homelab-object-storage.service
+  docker compose -f storage/compose.yaml --profile bootstrap run --rm init
+else
+  systemctl enable --now homelab-monitoring.service
+fi
+printf 'Installed on %s. Run the live checks in README.md.\n' "$node"

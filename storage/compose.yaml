@@ -1,0 +1,44 @@
+name: homelab-object-storage
+services:
+  rustfs:
+    image: rustfs/rustfs:1.0.0@sha256:8cc9801755448b71a786705ce76692c77e14936cccd87cf2fc31842e58f4d1ff
+    network_mode: host
+    env_file: ../runtime/rustfs.env
+    environment:
+      RUSTFS_VOLUMES: /data
+      RUSTFS_ADDRESS: 10.20.0.1:9000
+      RUSTFS_CONSOLE_ADDRESS: 127.0.0.1:9001
+      RUSTFS_CONSOLE_ENABLE: "true"
+      RUSTFS_OBS_LOGGER_LEVEL: warn
+      RUSTFS_OBS_LOG_DIRECTORY: /logs
+    security_opt: ["no-new-privileges:true"]
+    volumes:
+      - type: bind
+        source: /tank/observability/rustfs/data
+        target: /data
+        bind: {create_host_path: false}
+      - type: bind
+        source: /tank/observability/rustfs/logs
+        target: /logs
+        bind: {create_host_path: false}
+    restart: "no"
+    mem_limit: 768m
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://10.20.0.1:9000/health/ready"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}
+  init:
+    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
+    profiles: [bootstrap]
+    network_mode: host
+    env_file: [../runtime/rustfs.env, ../runtime/loki.env]
+    entrypoint: [/bin/sh, /bootstrap/init.sh]
+    volumes:
+      - ./init.sh:/bootstrap/init.sh:ro
+      - ./loki-policy.json:/bootstrap/loki-policy.json:ro
+    restart: "no"

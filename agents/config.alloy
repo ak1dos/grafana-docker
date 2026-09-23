@@ -1,0 +1,93 @@
+logging {
+  level = "warn"
+}
+prometheus.exporter.unix "host" {
+  rootfs_path = "/host"
+  procfs_path = "/host/proc"
+  sysfs_path = "/host/sys"
+}
+prometheus.scrape "host" {
+  targets = prometheus.exporter.unix.host.targets
+  job_name = "host"
+  scrape_interval = "30s"
+  forward_to = [prometheus.relabel.host.receiver]
+}
+prometheus.exporter.cadvisor "containers" {
+  docker_only = true
+  store_container_labels = false
+}
+prometheus.scrape "containers" {
+  targets = prometheus.exporter.cadvisor.containers.targets
+  job_name = "containers"
+  scrape_interval = "30s"
+  forward_to = [prometheus.relabel.host.receiver]
+}
+prometheus.relabel "host" {
+  rule {
+    target_label = "host"
+    replacement = sys.env("HOST_LABEL")
+  }
+  rule {
+    target_label = "instance"
+    replacement = sys.env("HOST_LABEL")
+  }
+  forward_to = [prometheus.remote_write.central.receiver]
+}
+prometheus.remote_write "central" {
+  endpoint {
+    url = sys.env("INGEST_URL") + "/api/v1/write"
+    basic_auth {
+      username = sys.env("INGEST_USER")
+      password = sys.env("INGEST_PASSWORD")
+    }
+  }
+}
+discovery.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+}
+discovery.relabel "containers" {
+  targets = discovery.docker.containers.targets
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex = "/(.*)"
+    target_label = "container"
+  }
+  rule {
+    target_label = "host"
+    replacement = sys.env("HOST_LABEL")
+  }
+  rule {
+    target_label = "job"
+    replacement = "docker"
+  }
+}
+loki.source.docker "containers" {
+  host = "unix:///var/run/docker.sock"
+  targets = discovery.relabel.containers.output
+  forward_to = [loki.write.central.receiver]
+}
+loki.relabel "journal" {
+  forward_to = []
+  rule {
+    source_labels = ["__journal__systemd_unit"]
+    target_label = "unit"
+  }
+}
+loki.source.journal "system" {
+  labels = { host = sys.env("HOST_LABEL"), job = "journal" }
+  max_age = "24h"
+  relabel_rules = loki.relabel.journal.rules
+  forward_to = [loki.write.central.receiver]
+}
+loki.write "central" {
+  endpoint {
+    url = sys.env("INGEST_URL") + "/loki/api/v1/push"
+    basic_auth {
+      username = sys.env("INGEST_USER")
+      password = sys.env("INGEST_PASSWORD")
+    }
+  }
+  wal {
+    enabled = true
+  }
+}

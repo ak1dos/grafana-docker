@@ -1,87 +1,53 @@
-version: '3.8'
-
-volumes:
-  prometheus-data:
-    driver: local
-  grafana-data:
-    driver: local
-  loki-data:
-    driver: local
-
+name: homelab-monitoring
 services:
   prometheus:
-    image: prom/prometheus:latest
-    container_name: prometheus
-    ports:
-      - "9090:9090"
+    image: prom/prometheus:v3.14.0
+    command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus", "--storage.tsdb.retention.time=15d", "--storage.tsdb.retention.size=8GB", "--web.enable-remote-write-receiver"]
     volumes:
-      - ./config/prometheus:/etc/prometheus
+      - ./config/prometheus:/etc/prometheus:ro
       - prometheus-data:/prometheus
     restart: unless-stopped
-    command:
-      - "--config.file=/etc/prometheus/prometheus.yml"
-
+    mem_limit: 1g
+    logging: &logging
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}
   loki:
-    image: grafana/loki:latest
-    container_name: loki
+    image: grafana/loki:3.7.7
+    command: ["-config.file=/etc/loki/loki.yml", "-config.expand-env=true"]
+    env_file: ./runtime/loki.env
     volumes:
-      - ./config/loki:/etc/loki
+      - ./config/loki:/etc/loki:ro
       - loki-data:/loki
-    ports:
-      - "3100:3100"
     restart: unless-stopped
-    command: 
-      - "--config.file=/etc/loki/loki.yml"
-  
-  promtail:
-    image:  grafana/promtail:latest
-    container_name: promtail
-    volumes:
-      - ./config/promtail/promtail.yml:/etc/promtail/promtail.yml
-      - ./config/promtail/positions:/tmp/positions
-      - /var/lib/docker/containers:/var/lib/docker/containers:ro
-      - /var/run/docker.sock:/var/run/docker.sock
-      - /var/log/:/var/log/
-    command: 
-      - "--config.file=/etc/promtail/promtail.yml"
-    depends_on:
-      - loki
-
+    mem_limit: 1g
+    logging: *logging
   grafana:
-    image: grafana/grafana:latest
-    container_name: grafana
-    ports:
-      - "3000:3000"
+    image: grafana/grafana:13.2.1
+    ports: ["127.0.0.1:3000:3000"]
+    env_file: ./runtime/grafana.env
+    environment:
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
     volumes:
       - grafana-data:/var/lib/grafana
+      - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./config/grafana/dashboards:/var/lib/grafana/dashboards:ro
     restart: unless-stopped
-
-  node_exporter:
-    image: quay.io/prometheus/node-exporter:latest
-    container_name: node_exporter
-    command:
-      - '--path.rootfs=/host'
-    pid: host
-    restart: unless-stopped
+    mem_limit: 384m
+    logging: *logging
+  gateway:
+    image: nginx:1.28.0-alpine
+    command: ["/bin/sh", "-ec", "cp /run/secrets/ingest.htpasswd /tmp/ingest.htpasswd; chmod 644 /tmp/ingest.htpasswd; exec nginx -g 'daemon off;'"]
+    ports: ["${MONITORING_BIND_IP:?set WireGuard address}:3100:8080"]
     volumes:
-      - '/:/host:ro,rslave'
-
-  cadvisor:
-    image: zcube/cadvisor:latest
-    container_name: cadvisor
-    privileged: true
-    devices:
-      - /dev/kmsg:/dev/kmsg
-    volumes:
-      - /var/run:/var/run:ro
-      - /sys:/sys:ro
-      - /var/lib/docker/:/var/lib/docker:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /etc/machine-id:/etc/machine-id:ro
-      - /var/lib/dbus/machine-id:/var/lib/dbus/machine-id:ro
+      - ./config/gateway/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./runtime/ingest.htpasswd:/run/secrets/ingest.htpasswd:ro
+    depends_on: [prometheus, loki]
     restart: unless-stopped
-
-networks:
-  default:
-    external:
-      name: nginx-proxy
+    mem_limit: 64m
+    logging: *logging
+volumes:
+  prometheus-data:
+  grafana-data:
+  loki-data:
