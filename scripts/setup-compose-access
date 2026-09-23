@@ -8,6 +8,18 @@ id "$operator" >/dev/null
 [[ -d "$dest/runtime" ]] || { echo 'Install the project first.' >&2; exit 1; }
 # Verify existing Docker access; do not modify socket permissions or group membership.
 runuser -u "$operator" -- docker info --format '{{.ServerVersion}}' >/dev/null
+# cp -a preserves private staging modes: normalize non-secret application files.
+chmod 0755 "$dest"
+chmod 0644 "$dest/docker-compose.yaml"
+for directory in agents config storage scripts; do
+  find "$dest/$directory" -type d -exec chmod 0755 {} +
+  find "$dest/$directory" -type f -exec chmod 0644 {} +
+done
+find "$dest/scripts" -maxdepth 1 -type f -exec chmod 0755 {} +
+if [[ -f "$dest/.env" ]]; then
+  chown "$operator:$(id -gn "$operator")" "$dest/.env"
+  chmod 0600 "$dest/.env"
+fi
 chown -R "$operator:$(id -gn "$operator")" "$dest/runtime"
 find "$dest/runtime" -type d -exec chmod 0700 {} +
 find "$dest/runtime" -type f -exec chmod 0600 {} +
