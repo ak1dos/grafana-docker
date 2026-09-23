@@ -1,0 +1,20 @@
+#!/bin/bash
+# One-time host permission setup; no service restart or data ownership changes.
+set -euo pipefail
+[[ $EUID -eq 0 ]] || { echo 'Run once with sudo.' >&2; exit 1; }
+operator=mika
+dest=/opt/applications/homelab-monitoring
+id "$operator" >/dev/null
+[[ -d "$dest/runtime" ]] || { echo 'Install the project first.' >&2; exit 1; }
+# Verify existing Docker access; do not modify socket permissions or group membership.
+runuser -u "$operator" -- docker info --format '{{.ServerVersion}}' >/dev/null
+chown -R "$operator:$(id -gn "$operator")" "$dest/runtime"
+find "$dest/runtime" -type d -exec chmod 0700 {} +
+find "$dest/runtime" -type f -exec chmod 0600 {} +
+cd "$dest"
+runuser -u "$operator" -- docker compose -f agents/compose.yaml config -q
+case "$(hostname -s)" in
+  fujiserver) runuser -u "$operator" -- docker compose -f storage/compose.yaml config -q ;;
+  ryzen5lenovo) runuser -u "$operator" -- docker compose config -q ;;
+esac
+printf 'Compose ready without sudo for %s in %s\n' "$operator" "$dest"

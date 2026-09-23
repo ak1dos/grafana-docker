@@ -3,7 +3,7 @@ set -euo pipefail
 cd -- "$(dirname -- "$0")/.."
 repo_dir=$PWD
 python3 -m unittest discover -s tests -v
-bash -n scripts/install-host scripts/wait-vpn
+bash -n scripts/install-host scripts/wait-vpn scripts/setup-compose-access
 sh -n storage/init.sh storage/start-rustfs.sh
 MONITORING_BIND_IP=10.20.0.5 docker compose config -q
 docker compose -f storage/compose.yaml config -q

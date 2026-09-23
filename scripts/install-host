@@ -47,7 +47,7 @@ if [[ $node == fujiserver ]]; then
   install -d -m 0700 /tank/observability/rustfs
   install -d -o 10001 -g 10001 -m 0700 /tank/observability/rustfs/data /tank/observability/rustfs/logs
 fi
-# An immutable root-owned runtime tree, separate from the editable Git checkout.
+# Root-owned application files; private credentials readable by the Docker operator.
 dest=/opt/applications/homelab-monitoring
 install -d -m 0755 "$dest"
 for item in docker-compose.yaml config agents storage scripts; do
@@ -69,6 +69,7 @@ fi
 sed -i 's/^S3_ENDPOINT=10\.20\.0\.1:9000$/S3_ENDPOINT=10.20.0.1:19000/' "$dest/runtime/loki.env"
 chown -R root:root "$dest"
 chmod 0755 "$dest/scripts/"*
+bash "$dest/scripts/setup-compose-access"
 cd "$dest"
 docker compose -f agents/compose.yaml config -q
 if [[ $node == fujiserver ]]; then

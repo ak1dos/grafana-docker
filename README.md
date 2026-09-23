@@ -48,9 +48,11 @@ Dal checkout preparato, prima su Fuji e poi su Ryzen:
 sudo bash scripts/install-host
 ```
 
-Riconosce soltanto i due hostname, verifica dataset/mount, prepara sottodirectory UID 10001, copia configurazione root-owned in `/opt/applications/homelab-monitoring`, disabilita le precedenti unità systemd del progetto e inizializza bucket/account RustFS. Se UFW è attivo autorizza S3 solo dal peer Ryzen su wg0. Non cancella volumi o dati preesistenti; non modifica la quota di un dataset già presente.
+Riconosce soltanto i due hostname, verifica dataset/mount, prepara sottodirectory UID 10001, copia configurazione e assegna le credenziali private a `mika` in `/opt/applications/homelab-monitoring`, disabilita le precedenti unità systemd del progetto e inizializza bucket/account RustFS. Se UFW è attivo autorizza S3 solo dal peer Ryzen su wg0. Non cancella volumi o dati preesistenti; non modifica la quota di un dataset già presente.
 
 La gestione ordinaria usa Docker Compose e restart `unless-stopped`. Il container RustFS verifica il mount ZFS prima di avviare il processo. Se il DAS manca rifiuta l’avvio; non scrive su una directory SSD sostitutiva. L’indirizzo VPN deve essere disponibile. Il bootstrap è ripetibile e non ruota credenziali esistenti.
+
+Per un’installazione già presente, applicare una volta i nuovi permessi con `sudo bash scripts/setup-compose-access`. Il comando non riavvia servizi e non cambia proprietari dei dati sotto `/srv` o sul DAS.
 
 ## Gestione Docker
 
@@ -58,21 +60,21 @@ Dalla directory `/opt/applications/homelab-monitoring`:
 
 ```sh
 # Fuji: storage
-sudo docker compose -f storage/compose.yaml up -d
-sudo docker compose -f storage/compose.yaml ps
-sudo docker compose -f storage/compose.yaml logs --tail 100 -f rustfs
-sudo docker compose -f storage/compose.yaml restart rustfs
+docker compose -f storage/compose.yaml up -d
+docker compose -f storage/compose.yaml ps
+docker compose -f storage/compose.yaml logs --tail 100 -f rustfs
+docker compose -f storage/compose.yaml restart rustfs
 # Inizializzazione bucket, una volta o dopo ripristino
-sudo docker compose -f storage/compose.yaml --profile bootstrap run --rm init
+docker compose -f storage/compose.yaml --profile bootstrap run --rm init
 # Ryzen: backend
-sudo docker compose up -d
-sudo docker compose ps
+docker compose up -d
+docker compose ps
 # Entrambi: agent
-sudo docker compose -f agents/compose.yaml up -d
-sudo docker compose -f agents/compose.yaml logs --tail 100 alloy
+docker compose -f agents/compose.yaml up -d
+docker compose -f agents/compose.yaml logs --tail 100 alloy
 ```
 
-`stop` ferma, `start` riavvia, `down` rimuove i container lasciando i bind mount sull’host. Non cancellare le directory dati. `sudo` serve per leggere i file credenziali root-owned; l’installer root serve solo a preparare filesystem, permessi e firewall. Non occorrono comandi systemctl nella gestione ordinaria.
+`stop` ferma, `start` riavvia, `down` rimuove i container lasciando i bind mount sull’host. Non cancellare le directory dati. Le credenziali sono leggibili solo da `mika` e root (directory 0700, file 0600). Il comando Docker Compose non richiede sudo; l’installer root serve solo a preparare filesystem, permessi e firewall. Non occorrono comandi systemctl nella gestione ordinaria.
 
 ## Accesso UI
 
