@@ -65,6 +65,8 @@ else
   done
   printf 'MONITORING_BIND_IP=%s\n' "$vpn_ip" > "$dest/.env"
 fi
+# Normalize the endpoint in existing credentials without rotating any secret.
+sed -i 's/^S3_ENDPOINT=10\.20\.0\.1:9000$/S3_ENDPOINT=10.20.0.1:19000/' "$dest/runtime/loki.env"
 chown -R root:root "$dest"
 chmod 0755 "$dest/scripts/"*
 cd "$dest"
@@ -73,74 +75,22 @@ if [[ $node == fujiserver ]]; then
   docker compose -f storage/compose.yaml config -q
   # Host-networked S3 follows INPUT firewall rules; no Docker port forwarding.
   if command -v ufw >/dev/null && ufw status | head -1 | grep -q 'Status: active'; then
-    ufw allow in on wg0 from 10.20.0.5 to 10.20.0.1 port 9000 proto tcp comment homelab-s3
+    ufw allow in on wg0 from 10.20.0.5 to 10.20.0.1 port 19000 proto tcp comment homelab-s3
   fi
 else
   docker compose config -q
 fi
-cat > /etc/systemd/system/homelab-telemetry.service <<EOF
-[Unit]
-Description=Homelab Alloy host metrics and logs
-Requires=docker.service
-After=docker.service network-online.target
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-WorkingDirectory=$dest
-ExecStart=/usr/bin/docker compose -f agents/compose.yaml up -d
-ExecStop=/usr/bin/docker compose -f agents/compose.yaml stop
-TimeoutStartSec=300
-[Install]
-WantedBy=multi-user.target
-EOF
+# Retire the old supervisors before handing lifecycle ownership to Docker.
+for unit in homelab-object-storage homelab-monitoring homelab-telemetry; do
+  if [[ -f /etc/systemd/system/$unit.service ]]; then
+    systemctl disable --now "$unit.service"
+  fi
+done
+docker compose -f agents/compose.yaml up -d
 if [[ $node == fujiserver ]]; then
-  cat > /etc/systemd/system/homelab-object-storage.service <<EOF
-[Unit]
-Description=RustFS S3 on the homelab DAS
-Requires=docker.service
-After=docker.service network-online.target
-RequiresMountsFor=/tank/observability
-[Service]
-Type=simple
-WorkingDirectory=$dest
-ExecStartPre=/usr/bin/mountpoint -q /tank/observability
-ExecStartPre=$dest/scripts/wait-vpn 10.20.0.1
-ExecStart=/usr/bin/docker compose -f storage/compose.yaml up --abort-on-container-exit --exit-code-from rustfs
-ExecStop=/usr/bin/docker compose -f storage/compose.yaml stop
-Restart=always
-RestartSec=15
-TimeoutStartSec=90
-TimeoutStopSec=120
-[Install]
-WantedBy=multi-user.target
-EOF
-else
-  cat > /etc/systemd/system/homelab-monitoring.service <<EOF
-[Unit]
-Description=Grafana Prometheus Loki and ingestion gateway
-Requires=docker.service
-After=docker.service network-online.target wg-quick@wg0.service
-StartLimitIntervalSec=0
-[Service]
-Type=oneshot
-RemainAfterExit=yes
-WorkingDirectory=$dest
-Restart=on-failure
-RestartSec=15
-ExecStartPre=$dest/scripts/wait-vpn 10.20.0.5
-ExecStart=/usr/bin/docker compose up -d
-ExecStop=/usr/bin/docker compose stop
-TimeoutStartSec=300
-[Install]
-WantedBy=multi-user.target
-EOF
-fi
-systemctl daemon-reload
-systemctl enable --now homelab-telemetry.service
-if [[ $node == fujiserver ]]; then
-  systemctl enable --now homelab-object-storage.service
+  docker compose -f storage/compose.yaml up -d --wait --wait-timeout 180 rustfs
   docker compose -f storage/compose.yaml --profile bootstrap run --rm init
 else
-  systemctl enable --now homelab-monitoring.service
+  docker compose up -d
 fi
-printf 'Installed on %s. Run the live checks in README.md.\n' "$node"
+printf 'Installed on %s. Manage services with docker compose from %s.\n' "$node" "$dest"

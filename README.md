@@ -4,7 +4,7 @@ Backend Grafana/Prometheus/Loki su Ryzen; RustFS sul DAS Fuji; Alloy indipendent
 
 ## Componenti e accesso
 
-- RustFS 1.0.0 fissato per digest; S3 `10.20.0.1:9000`, console soltanto `127.0.0.1:9001` su Fuji.
+- RustFS 1.0.0 fissato per digest; S3 `10.20.0.1:19000`, console soltanto `127.0.0.1:9001` su Fuji.
 - Dataset `tank/observability`, quota iniziale 128 GiB; sottocartelle `rustfs/data` e `rustfs/logs`, UID 10001. Non condiviso NFS, distinto da backup/documenti/media. Il mirror hardware è visto come un unico dispositivo: nessuna finta distribuzione su quattro cartelle e nessuna HA tra sedi.
 - Grafana loopback 3000 su Ryzen; Prometheus e Loki senza porte host. Gateway ingestione su VPN 3100, autenticato per host.
 - Prometheus 15 giorni/8 GB, Loki 30 giorni; WAL/cache/compactor su SSD Ryzen, oggetti S3 sul DAS Fuji. Il limite TSDB non include tutto il WAL: mantenere margine SSD.
@@ -48,11 +48,31 @@ Dal checkout preparato, prima su Fuji e poi su Ryzen:
 sudo bash scripts/install-host
 ```
 
-Riconosce soltanto i due hostname, verifica dataset/mount, prepara sottodirectory UID 10001, copia configurazione root-owned in `/opt/applications/homelab-monitoring`, installa unità systemd e inizializza bucket/account RustFS. Se UFW è attivo autorizza S3 solo dal peer Ryzen su wg0. Non cancella volumi o dati preesistenti; non modifica la quota di un dataset già presente.
+Riconosce soltanto i due hostname, verifica dataset/mount, prepara sottodirectory UID 10001, copia configurazione root-owned in `/opt/applications/homelab-monitoring`, disabilita le precedenti unità systemd del progetto e inizializza bucket/account RustFS. Se UFW è attivo autorizza S3 solo dal peer Ryzen su wg0. Non cancella volumi o dati preesistenti; non modifica la quota di un dataset già presente.
 
-RustFS non ha restart Docker autonomo: systemd attende mount ZFS e IP VPN prima dell’avvio. Il bootstrap S3 è ripetibile: crea l’utente solo se assente e conferma che le credenziali fornite funzionino. Un utente già esistente con password diversa produce errore, senza rotazione implicita. L’accesso Loki è limitato al bucket `loki`.
+La gestione ordinaria usa Docker Compose e restart `unless-stopped`. Il container RustFS verifica il mount ZFS prima di avviare il processo. Se il DAS manca rifiuta l’avvio; non scrive su una directory SSD sostitutiva. L’indirizzo VPN deve essere disponibile. Il bootstrap è ripetibile e non ruota credenziali esistenti.
 
-Aggiornamenti: dopo copia revisionata dei file, `systemctl restart homelab-object-storage` su Fuji; per backend `docker compose up -d` dalla directory runtime; per agenti `docker compose -f agents/compose.yaml up -d`. Rieseguire installer non garantisce riavvio delle unità già attive. Mai `down -v` in produzione.
+## Gestione Docker
+
+Dalla directory `/opt/applications/homelab-monitoring`:
+
+```sh
+# Fuji: storage
+sudo docker compose -f storage/compose.yaml up -d
+sudo docker compose -f storage/compose.yaml ps
+sudo docker compose -f storage/compose.yaml logs --tail 100 -f rustfs
+sudo docker compose -f storage/compose.yaml restart rustfs
+# Inizializzazione bucket, una volta o dopo ripristino
+sudo docker compose -f storage/compose.yaml --profile bootstrap run --rm init
+# Ryzen: backend
+sudo docker compose up -d
+sudo docker compose ps
+# Entrambi: agent
+sudo docker compose -f agents/compose.yaml up -d
+sudo docker compose -f agents/compose.yaml logs --tail 100 alloy
+```
+
+`stop` ferma, `start` riavvia, `down` rimuove i container lasciando i bind mount sull’host. Non cancellare le directory dati. `sudo` serve per leggere i file credenziali root-owned; l’installer root serve solo a preparare filesystem, permessi e firewall. Non occorrono comandi systemctl nella gestione ordinaria.
 
 ## Accesso UI
 
@@ -97,6 +117,6 @@ Poi dal repository: `python3 scripts/check-smoke` e `python3 scripts/check-s3-re
 
 ## Controlli live e rollback
 
-Controllare `systemctl status homelab-object-storage homelab-telemetry` su Fuji e `homelab-monitoring homelab-telemetry` su Ryzen. Verificare `node_uname_info` e CPU/RAM container per entrambi; in Loki Docker/journald con etichette host corrette. Emettere un marker `logger` e controllarne l’arrivo. Misurare RAM, swap, OOM e crescita dataset. Limiti iniziali RustFS 768 MiB, Alloy 384 MiB: non sono una promessa di capacità. Collaudare reboot e DAS assente in finestra dedicata.
+Controllare `docker compose ps` per ciascuno dei manifest installati. Verificare `node_uname_info` e CPU/RAM container per entrambi; in Loki Docker/journald con etichette host corrette. Emettere un marker `logger` e controllarne l’arrivo. Misurare RAM, swap, OOM e crescita dataset. Limiti iniziali RustFS 768 MiB, Alloy 384 MiB: non sono una promessa di capacità. Collaudare reboot e DAS assente in finestra dedicata.
 
-Rollback: fermare solo le unità del progetto e preservare volumi/dataset. Nessuna riconversione automatica RustFS→Garage/MinIO. Vecchi repository GitHub restano intatti fino al collaudo live.
+Rollback: fermare solo i container del progetto e preservare volumi/dataset. Nessuna riconversione automatica RustFS→Garage/MinIO. Vecchi repository GitHub restano intatti fino al collaudo live.

@@ -31,3 +31,7 @@ Checkout durevole salvato in `/Volumes/SSD/progetti/github/homelab-monitoring`; 
 Verifica SSH su entrambi gli host: dati applicativi centralizzati sotto `/srv`, applicazioni in `/opt/applications`; nessun container o volume nominato del nuovo stack presente. Backend e Alloy passano a bind mount `/srv/homelab-monitoring/{prometheus,loki,grafana,alloy}`; RustFS resta sul DAS. Installer aggiornato a `/opt/applications/homelab-monitoring`. UID verificati dalle immagini (Prometheus 65534, Grafana 472, Loki 10001); directory create esplicitamente, creazione automatica Compose disattivata.
 
 Validazioni native e generazione/validazione Compose dello smoke passate dopo la modifica. Il precedente collaudo S3 resta valido per l’integrazione; avvio e scrittura sui bind mount dei server richiedono ancora installazione root e collaudo live.
+
+## Correzione avvio Fuji e gestione Docker
+
+Dopo installazione utente: Alloy avviato e dataset montato; RustFS falliva con `Address in use` mentre un listener preesistente occupava `*:9000`. Porta 19000 verificata libera. Endpoint aggiornato a 10.20.0.1:19000 senza rotazione dei segreti. Installer ritira le unità systemd del progetto e usa Compose; RustFS restart unless-stopped con guardia ZFS nel container. Guardia provata in container sul dataset reale Fuji (accettato) e su directory ordinaria locale (rifiutata). Validatori passati. Correzione staged; attivazione richiede nuova esecuzione root, sudo SSH non interattivo non disponibile.
