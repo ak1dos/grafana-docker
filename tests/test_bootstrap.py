@@ -22,6 +22,10 @@ class BootstrapTest(unittest.TestCase):
             self.assertEqual(app["S3_REGION"], "us-east-1")
             self.assertEqual(app["S3_ENDPOINT"], "rustfs:9000")
             self.assertIn(pathlib.Path("agents/fujiserver.env"), list(files))
+            self.assertIn(pathlib.Path("goose.htpasswd"), list(files))
+            self.assertIn(pathlib.Path("goose-reader"), list(files))
+            self.assertTrue(files[pathlib.Path("goose.htpasswd")].startswith(b"goose:$apr1$"))
+            self.assertTrue(files[pathlib.Path("goose-reader")].startswith(b"goose:"))
             for p in target.rglob("*"):
                 if p.is_file():
                     self.assertEqual(p.stat().st_mode & 0o077, 0)

@@ -10,7 +10,7 @@ case "$node" in
   *) echo "Unsupported host: $node" >&2; exit 1 ;;
 esac
 if [[ $node == fujiserver ]]; then
-  required_files=(rustfs.env loki.env grafana.env ingest.htpasswd alertmanager.yml)
+  required_files=(rustfs.env loki.env grafana.env ingest.htpasswd goose.htpasswd alertmanager.yml)
 else
   required_files=()
 fi
@@ -58,7 +58,7 @@ done
 install -d -m 0700 "$dest/runtime"
 install -m 0600 "$source_dir/runtime/agents/$node.env" "$dest/runtime/agent.env"
 if [[ $node == fujiserver ]]; then
-  for file in rustfs.env loki.env grafana.env ingest.htpasswd alertmanager.yml; do
+  for file in rustfs.env loki.env grafana.env ingest.htpasswd goose.htpasswd alertmanager.yml; do
     install -m 0600 "$source_dir/runtime/$file" "$dest/runtime/$file"
   done
   printf 'MONITORING_BIND_IP=10.20.0.1\n' > "$dest/.env"

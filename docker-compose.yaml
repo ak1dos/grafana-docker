@@ -69,11 +69,12 @@ services:
     logging: *logging
   gateway:
     image: nginx:1.28.0-alpine
-    command: ["/bin/sh", "-ec", "cp /run/secrets/ingest.htpasswd /tmp/ingest.htpasswd; chmod 644 /tmp/ingest.htpasswd; exec nginx -g 'daemon off;'"]
+    command: ["/bin/sh", "-ec", "cp /run/secrets/ingest.htpasswd /tmp/ingest.htpasswd; cp /run/secrets/goose.htpasswd /tmp/goose.htpasswd; chmod 644 /tmp/ingest.htpasswd /tmp/goose.htpasswd; exec nginx -g 'daemon off;'"]
     ports: ["${MONITORING_BIND_IP:?set WireGuard address}:3100:8080"]
     volumes:
       - ./config/gateway/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./runtime/ingest.htpasswd:/run/secrets/ingest.htpasswd:ro
+      - ./runtime/goose.htpasswd:/run/secrets/goose.htpasswd:ro
     depends_on: [prometheus, loki]
     restart: unless-stopped
     mem_limit: 64m

@@ -5,6 +5,7 @@
 - **Fuji:** Grafana, Prometheus, Loki, RustFS, gateway di ingestione e Alloy, nello stesso progetto `homelab-monitoring`.
 - **Ryzen:** soltanto Alloy, progetto `homelab-telemetry`.
 - Entrambi gli agenti inviano metriche e log al gateway autenticato `10.20.0.1:3100` attraverso WireGuard.
+- Il collector Goose su Ryzen legge solo `/loki/api/v1/query_range` con una credenziale distinta dall'ingestione; nessuna porta Loki aggiuntiva è pubblicata.
 - Loki usa `rustfs:9000` nella rete Docker; S3 e console sono pubblicati solo sul loopback di Fuji, rispettivamente 19000 e 9001.
 
 La distribuzione precedente con backend su Ryzen è superata dalla scelta esplicita dell’utente del 2026-09-23. I documenti di validazione precedenti conservano la cronologia, non descrivono necessariamente lo stato corrente.
@@ -34,7 +35,7 @@ docker compose logs --tail 100 -f
 
 Il manifest installato su Ryzen contiene solo Alloy. Su Fuji puoi selezionare il servizio, per esempio `docker compose restart grafana` o `docker compose logs -f rustfs`. `stop` ferma i container, `start` li riavvia, `down` li rimuove preservando i bind mount. Non cancellare le directory dati durante manutenzione ordinaria.
 
-Le credenziali runtime appartengono a `mika`, directory 0700 e file 0600; i manifest/configurazioni sono leggibili dai container. Non stampare `docker compose config` senza `-q`: contiene segreti.
+Le credenziali runtime appartengono a `mika`, directory 0700 e file 0600; i manifest/configurazioni sono leggibili dai container. Non stampare `docker compose config` senza `-q`: contiene segreti. `runtime/goose.htpasswd` autentica la sola lettura Loki; `runtime/goose-reader` generato al bootstrap contiene la coppia da installare in `server-agent/secrets/loki_reader` su Ryzen. Non usare le credenziali Alloy per questa lettura.
 
 ## Accesso Grafana e RustFS
 
@@ -52,7 +53,7 @@ Il `docker-compose.yaml` principale contiene tutte le definizioni di Fuji, senza
 
 ## Installazione iniziale
 
-`python3 scripts/bootstrap` crea segreti nuovi e rifiuta sovrascritture. Fuji richiede tutti i file runtime e il proprio file agente; Ryzen solo `runtime/agents/ryzen5lenovo.env`. Il primo setup host usa `sudo bash scripts/install-host` per filesystem e permessi. Successivamente si usa solo Compose. Non sono installati supervisori systemd del progetto.
+`python3 scripts/bootstrap` crea segreti nuovi e rifiuta sovrascritture. Fuji richiede tutti i file runtime, compreso `goose.htpasswd`, e il proprio file agente; Ryzen solo `runtime/agents/ryzen5lenovo.env`. Il primo setup host usa `sudo bash scripts/install-host` per filesystem e permessi. Successivamente si usa solo Compose. Non sono installati supervisori systemd del progetto.
 
 Su Fuji inizializzazione bucket/account (ripetibile):
 

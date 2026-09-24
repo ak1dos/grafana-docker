@@ -29,6 +29,12 @@ def generate(target):
         passwd.append(host + ":" + hashed)
         write("agents/" + host + ".env", f"HOST_LABEL={host}\nINGEST_URL=http://10.20.0.1:3100\nINGEST_USER={host}\nINGEST_PASSWORD={password}\n")
     write("ingest.htpasswd", "\n".join(passwd) + "\n")
+    reader_password = secrets.token_urlsafe(36)
+    reader_hash = subprocess.run(["openssl", "passwd", "-apr1", "-stdin"],
+                                 input=reader_password + "\n", text=True,
+                                 capture_output=True, check=True).stdout.strip()
+    write("goose.htpasswd", "goose:" + reader_hash + "\n")
+    write("goose-reader", "goose:" + reader_password + "\n")
 
 
 if __name__ == "__main__":
