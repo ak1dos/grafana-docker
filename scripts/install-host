@@ -10,7 +10,7 @@ case "$node" in
   *) echo "Unsupported host: $node" >&2; exit 1 ;;
 esac
 if [[ $node == fujiserver ]]; then
-  required_files=(rustfs.env loki.env grafana.env ingest.htpasswd)
+  required_files=(rustfs.env loki.env grafana.env ingest.htpasswd alertmanager.yml)
 else
   required_files=()
 fi
@@ -30,6 +30,8 @@ done
 install -d -m 0755 /srv/homelab-monitoring
 install -d -o 0 -g 0 -m 0700 /srv/homelab-monitoring/alloy
 if [[ $node == fujiserver ]]; then
+  docker network inspect homelab-mail >/dev/null
+  install -d -o 1000 -g 1000 -m 0700 /srv/homelab-monitoring/alertmanager
   install -d -o 65534 -g 65534 -m 0700 /srv/homelab-monitoring/prometheus
   install -d -o 10001 -g 10001 -m 0700 /srv/homelab-monitoring/loki
   install -d -o 472 -g 0 -m 0700 /srv/homelab-monitoring/grafana
@@ -56,7 +58,7 @@ done
 install -d -m 0700 "$dest/runtime"
 install -m 0600 "$source_dir/runtime/agents/$node.env" "$dest/runtime/agent.env"
 if [[ $node == fujiserver ]]; then
-  for file in rustfs.env loki.env grafana.env ingest.htpasswd; do
+  for file in rustfs.env loki.env grafana.env ingest.htpasswd alertmanager.yml; do
     install -m 0600 "$source_dir/runtime/$file" "$dest/runtime/$file"
   done
   printf 'MONITORING_BIND_IP=10.20.0.1\n' > "$dest/.env"

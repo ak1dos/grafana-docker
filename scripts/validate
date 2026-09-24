@@ -11,4 +11,5 @@ docker run --rm -v "$repo_dir/config/prometheus:/etc/prometheus:ro" --entrypoint
 docker run --rm -v "$repo_dir/config/loki:/etc/loki:ro" --env-file runtime/loki.env grafana/loki:3.7.7 -config.file=/etc/loki/loki.yml -config.expand-env=true -verify-config=true
 docker run --rm -v "$repo_dir/agents:/etc/alloy:ro" --env-file runtime/agent.env grafana/alloy:v1.19.2 validate /etc/alloy/config.alloy
 docker run --rm -v "$repo_dir/config/gateway/nginx.conf:/etc/nginx/nginx.conf:ro" nginx:1.28.0-alpine nginx -t
+docker run --rm --user "$(id -u):$(id -g)" -v "$repo_dir/runtime/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro" --entrypoint amtool prom/alertmanager:v0.34.1 check-config /etc/alertmanager/alertmanager.yml
 git diff --check

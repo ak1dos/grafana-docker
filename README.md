@@ -80,3 +80,34 @@ Verificare entrambe le etichette host in Prometheus, log Docker/journald in Loki
 Il conteggio Valheim deriva dai log nativi crossplay ogni circa 10 minuti, con timestamp visibile e scadenza dopo 15 minuti: non è un conteggio in tempo reale. Non espone nomi dei giocatori. Le righe diagnostiche vengono conservate; la raccolta rimuove colori e prefissi ridondanti.
 
 Rigenerazione: `python3 scripts/build-dashboards`. Verifica query live: `python3 scripts/check-dashboard-queries` (usa le credenziali private locali senza stamparle). [Valutazione marketplace e prove](docs/dashboard-assessment-2026-09-23.md).
+
+## Email degli alert
+
+Prometheus invia le regole esistenti ad Alertmanager nella stessa pila Fuji.
+Alertmanager usa `smtp-relay:587` sulla rete Docker esterna `homelab-mail`;
+il relay deve essere già installato da homelab-core. Non sono necessarie nuove
+credenziali Brevo e non viene pubblicata una porta Alertmanager sull'host.
+Il tratto Docker interno usa SMTP senza TLS; il relay mantiene TLS verificato
+verso Brevo.
+
+Prima dell'installazione copiare `config/alertmanager/alertmanager.yml.example`
+in `runtime/alertmanager.yml`, impostare `to` e applicare `chmod 600`.
+La cartella runtime è esclusa da Git; gli indirizzi reali restano lì.
+Alertmanager gira come UID/GID 1000 per leggere il file privato e scrive stato,
+silenziamenti e deduplicazione in `/srv/homelab-monitoring/alertmanager`.
+
+Email per allarmi e risoluzioni; raggruppamento per alert e host, attesa iniziale
+30 secondi, aggiornamenti del gruppo ogni 5 minuti, promemoria ogni 4 ore.
+I tempi `for` delle quattro regole restano invariati. Per controllare:
+
+```sh
+docker compose ps alertmanager
+docker compose logs --since 30m alertmanager
+docker compose exec alertmanager amtool --alertmanager.url=http://localhost:9093 alert query
+```
+
+Dopo aver modificato i destinatari, validare con `amtool check-config` e ricreare
+il solo servizio (`docker compose up -d --force-recreate alertmanager`) per
+rileggere anche un file runtime sostituito atomicamente.
+Se Fuji è spento, il suo monitoraggio e il relay non possono inviare email:
+la rilevazione di quel guasto richiede un controllo esterno.
