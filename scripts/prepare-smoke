@@ -7,6 +7,7 @@ import sys
 root = Path(__file__).resolve().parents[1]
 target = Path(sys.argv[1]) if len(sys.argv) > 1 else Path('/private/tmp/homelab-rustfs-smoke')
 target.mkdir(mode=0o700, parents=True, exist_ok=False)
+shutil.copyfile(root / '.env', target / '.env')
 for name in ('config', 'storage'):
     shutil.copytree(root / name, target / name)
 subprocess.run([sys.executable, str(root/'scripts/bootstrap'), str(target/'runtime')], check=True)
@@ -22,12 +23,12 @@ s += 'volumes:\n  prometheus-data:\n  grafana-data:\n  loki-data:\n'
 # Only the test uses tmpfs: keep Docker Desktop disk pressure out of WAL tests.
 s=s.replace('      - loki-data:/loki', '    tmpfs: ["/loki:uid=10001,gid=10001,size=536870912"]')
 s=s.replace('volumes:\n  prometheus-data:', '''  rustfs-permissions:
-    image: rustfs/rustfs:1.0.0@sha256:8cc9801755448b71a786705ce76692c77e14936cccd87cf2fc31842e58f4d1ff
+    image: ${RUSTFS_IMAGE:?set RUSTFS_IMAGE in .env}
     user: "0:0"
     entrypoint: [/bin/sh, -ec, "chown 10001:10001 /data /logs"]
     volumes: ["rustfs-data:/data", "rustfs-logs:/logs"]
   rustfs:
-    image: rustfs/rustfs:1.0.0@sha256:8cc9801755448b71a786705ce76692c77e14936cccd87cf2fc31842e58f4d1ff
+    image: ${RUSTFS_IMAGE:?set RUSTFS_IMAGE in .env}
     depends_on:
       rustfs-permissions: {condition: service_completed_successfully}
     env_file: ./runtime/rustfs.env
@@ -42,7 +43,7 @@ s=s.replace('volumes:\n  prometheus-data:', '''  rustfs-permissions:
     volumes: ["rustfs-data:/data", "rustfs-logs:/logs"]
     mem_limit: 768m
   init:
-    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
+    image: ${MC_IMAGE:?set MC_IMAGE in .env}
     profiles: [bootstrap]
     env_file: [./runtime/rustfs.env, ./runtime/loki.env]
     entrypoint: [/bin/sh, /bootstrap/init.sh]

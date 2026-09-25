@@ -1,0 +1,20 @@
+#!/bin/sh
+# Fill missing deployment settings; existing target values always take precedence.
+set -eu
+source_dir=$1
+target=$2
+umask 077
+[ -f "$source_dir/.env.example" ]
+[ -e "$target" ] || : > "$target"
+source_env=$source_dir/.env
+[ -f "$source_env" ] || source_env=/dev/null
+if [ "$source_env" -ef "$target" ]; then source_env=/dev/null; fi
+temporary=$(mktemp "${target}.XXXXXX")
+trap 'rm -f "$temporary"' EXIT HUP INT TERM
+# Preserve target content, then append only absent keys from source and defaults.
+awk '
+  FILENAME == ARGV[1] {print; if ($0 ~ /^[A-Za-z_][A-Za-z0-9_]*=/) {split($0, a, "="); seen[a[1]]=1}; next}
+  /^[A-Za-z_][A-Za-z0-9_]*=/ {split($0, a, "="); if (!seen[a[1]]++) print}
+' "$target" "$source_env" "$source_dir/.env.example" > "$temporary"
+chmod 0600 "$temporary"
+mv "$temporary" "$target"

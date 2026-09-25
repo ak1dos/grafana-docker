@@ -2,18 +2,22 @@
 set -euo pipefail
 cd -- "$(dirname -- "$0")/.."
 repo_dir=$PWD
+image_for() {
+  docker compose --profile bootstrap config --no-env-resolution --format json |
+    python3 -c 'import json, sys; print(json.load(sys.stdin)["services"][sys.argv[1]]["image"])' "$1"
+}
 if [[ -d tests ]]; then
   python3 -m unittest discover -s tests -v
 fi
 bash -n scripts/install-host scripts/wait-vpn scripts/setup-compose-access
-sh -n storage/init.sh storage/start-rustfs.sh
+sh -n storage/init.sh storage/start-rustfs.sh scripts/prepare-env scripts/prepare-clean-container
 MONITORING_BIND_IP=10.20.0.1 docker compose config -q
-docker compose -f agents/compose.yaml config -q
-docker run --rm -v "$repo_dir/config/prometheus:/etc/prometheus:ro" --entrypoint promtool prom/prometheus:v3.14.0 check config /etc/prometheus/prometheus.yml
-docker run --rm -v "$repo_dir/config/loki:/etc/loki:ro" --env-file runtime/loki.env grafana/loki:3.7.7 -config.file=/etc/loki/loki.yml -config.expand-env=true -verify-config=true
-docker run --rm -v "$repo_dir/agents:/etc/alloy:ro" --env-file runtime/agent.env grafana/alloy:v1.19.2 validate /etc/alloy/config.alloy
-docker run --rm -v "$repo_dir/config/gateway/nginx.conf:/etc/nginx/nginx.conf:ro" -v "$repo_dir/runtime/ingest.htpasswd:/tmp/ingest.htpasswd:ro" -v "$repo_dir/runtime/goose.htpasswd:/tmp/goose.htpasswd:ro" nginx:1.28.0-alpine nginx -t
-docker run --rm --user "$(id -u):$(id -g)" -v "$repo_dir/runtime/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro" --entrypoint amtool prom/alertmanager:v0.34.1 check-config /etc/alertmanager/alertmanager.yml
+docker compose --env-file .env -f agents/compose.yaml config -q
+docker run --rm -v "$repo_dir/config/prometheus:/etc/prometheus:ro" --entrypoint promtool "$(image_for prometheus)" check config /etc/prometheus/prometheus.yml
+docker run --rm -v "$repo_dir/config/loki:/etc/loki:ro" --env-file runtime/loki.env "$(image_for loki)" -config.file=/etc/loki/loki.yml -config.expand-env=true -verify-config=true
+docker run --rm -v "$repo_dir/agents:/etc/alloy:ro" --env-file runtime/agent.env "$(image_for alloy)" validate /etc/alloy/config.alloy
+docker run --rm -v "$repo_dir/config/gateway/nginx.conf:/etc/nginx/nginx.conf:ro" -v "$repo_dir/runtime/ingest.htpasswd:/tmp/ingest.htpasswd:ro" -v "$repo_dir/runtime/goose.htpasswd:/tmp/goose.htpasswd:ro" "$(image_for gateway)" nginx -t
+docker run --rm --user "$(id -u):$(id -g)" -v "$repo_dir/runtime/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro" --entrypoint amtool "$(image_for alertmanager)" check-config /etc/alertmanager/alertmanager.yml
 if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   git diff --check
 fi

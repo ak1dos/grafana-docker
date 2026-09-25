@@ -11,6 +11,9 @@ import urllib.request
 root = Path('/private/tmp/homelab-rustfs-smoke')
 compose = ['docker', 'compose', '-f', str(root / 'compose.yaml')]
 reader = 'homelab-rustfs-smoke-reader'
+loki_image = json.loads(subprocess.check_output(
+    compose + ['config', '--no-env-resolution', '--format', 'json'], text=True)
+)['services']['loki']['image']
 query = urllib.parse.urlencode({'query': '{host="smoke",job="integration"}', 'since': '1h'})
 def get(port):
     with urllib.request.urlopen(f'http://127.0.0.1:{port}/loki/api/v1/query_range?{query}', timeout=5) as response:
@@ -23,7 +26,7 @@ subprocess.run(compose + ['stop', '-t', '30', 'loki'], check=True)
 subprocess.run(compose + ['start', 'loki'], check=True)
 config = root / 'config/loki/reader.yml'
 config.write_text((root / 'config/loki/loki.yml').read_text().replace('common:\n', 'common:\n  compactor_address: http://loki:3100\n'))
-subprocess.run(['docker', 'run', '-d', '--name', reader, '--network', 'homelab-rustfs-smoke_default', '-p', '127.0.0.1:13312:3100', '--env-file', str(root / 'runtime/loki.env'), '-v', str(root / 'config/loki') + ':/etc/loki:ro', '--tmpfs', '/loki:uid=10001,gid=10001', 'grafana/loki:3.7.7', '-config.file=/etc/loki/reader.yml', '-config.expand-env=true', '-target=read,query-scheduler', '-querier.query-store-only=true'], check=True, stdout=subprocess.DEVNULL)
+subprocess.run(['docker', 'run', '-d', '--name', reader, '--network', 'homelab-rustfs-smoke_default', '-p', '127.0.0.1:13312:3100', '--env-file', str(root / 'runtime/loki.env'), '-v', str(root / 'config/loki') + ':/etc/loki:ro', '--tmpfs', '/loki:uid=10001,gid=10001', loki_image, '-config.file=/etc/loki/reader.yml', '-config.expand-env=true', '-target=read,query-scheduler', '-querier.query-store-only=true'], check=True, stdout=subprocess.DEVNULL)
 try:
     deadline = time.monotonic() + 90
     while True:

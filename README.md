@@ -68,6 +68,32 @@ Il `docker-compose.yaml` principale contiene tutte le definizioni di Fuji, senza
 
 ## Installazione iniziale
 
+Prima del bootstrap copiare `.env.example` in `.env`. Le variabili `*_IMAGE`
+contengono il riferimento completo delle immagini (repository, tag ed eventuale
+digest); Compose le richiede esplicitamente. `.env` resta locale e ignorato da
+Git, `.env.example` registra le versioni stabili verificate. I segreti dei servizi
+rimangono nei file separati sotto `runtime/`.
+
+Per aggiornare un'installazione esistente, riportare le variabili `*_IMAGE`
+da `.env.example` nel suo `.env`, preservando `MONITORING_BIND_IP` e gli altri
+valori locali. `sh scripts/prepare-env . .env` aggiunge le variabili mancanti
+senza sovrascrivere quelle già impostate, anche durante l'installazione.
+Un `git pull` da solo non cambia le immagini selezionate.
+Eseguire `bash scripts/validate`, poi `docker compose pull` e
+`docker compose up -d`. Il manifest del collector si valida dalla radice con
+`docker compose --env-file .env -f agents/compose.yaml config -q`.
+Validazione e prove S3 usano le immagini risolte da Compose; lo smoke copia il
+`.env` locale nella propria directory isolata.
+
+Versioni stabili verificate il 2026-09-25: [Prometheus 3.15.0](https://github.com/prometheus/prometheus/releases/tag/v3.15.0),
+[Grafana 13.2.2](https://github.com/grafana/grafana/releases/tag/v13.2.2),
+[Loki 3.7.8](https://github.com/grafana/loki/releases/tag/v3.7.8),
+[Alloy 1.20.0](https://github.com/grafana/alloy/releases/tag/v1.20.0),
+[Nginx stable 1.30.5](https://nginx.org/en/download.html),
+[Alertmanager 0.34.1](https://github.com/prometheus/alertmanager/releases/tag/v0.34.1),
+[RustFS 1.0.0](https://github.com/rustfs/rustfs/releases/tag/1.0.0) e
+[mc RELEASE.2025-08-13T08-35-41Z](https://github.com/minio/mc/releases/tag/RELEASE.2025-08-13T08-35-41Z).
+
 `python3 scripts/bootstrap` crea segreti nuovi e rifiuta sovrascritture. Fuji richiede tutti i file runtime, compreso `goose.htpasswd`, e il proprio file agente; Ryzen solo `runtime/agents/ryzen5lenovo.env`. Il primo setup host usa `sudo bash scripts/install-host` per filesystem e permessi. Successivamente si usa solo Compose. Non sono installati supervisori systemd del progetto.
 
 Su Fuji inizializzazione bucket/account (ripetibile):

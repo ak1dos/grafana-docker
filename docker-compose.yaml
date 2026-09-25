@@ -1,7 +1,7 @@
 name: homelab-monitoring
 services:
   prometheus:
-    image: prom/prometheus:v3.14.0
+    image: ${PROMETHEUS_IMAGE:?set PROMETHEUS_IMAGE in .env}
     command: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus", "--storage.tsdb.retention.time=15d", "--storage.tsdb.retention.size=8GB", "--web.enable-remote-write-receiver"]
     volumes:
       - ./config/prometheus:/etc/prometheus:ro
@@ -15,7 +15,7 @@ services:
       driver: json-file
       options: {max-size: 10m, max-file: "3"}
   alertmanager:
-    image: prom/alertmanager:v0.34.1@sha256:e9733bafb1bdef9b00e25a21f8f99dc26a22224bf16641ad754d1649f4c3357a
+    image: ${ALERTMANAGER_IMAGE:?set ALERTMANAGER_IMAGE in .env}
     user: "1000:1000"
     command: ["--config.file=/etc/alertmanager/alertmanager.yml", "--storage.path=/alertmanager", "--cluster.listen-address="]
     volumes:
@@ -37,7 +37,7 @@ services:
   loki:
     depends_on:
       rustfs: {condition: service_healthy}
-    image: grafana/loki:3.7.7
+    image: ${LOKI_IMAGE:?set LOKI_IMAGE in .env}
     command: ["-config.file=/etc/loki/loki.yml", "-config.expand-env=true"]
     env_file: ./runtime/loki.env
     volumes:
@@ -50,7 +50,7 @@ services:
     mem_limit: 1g
     logging: *logging
   grafana:
-    image: grafana/grafana:13.2.1
+    image: ${GRAFANA_IMAGE:?set GRAFANA_IMAGE in .env}
     ports: ["192.168.1.54:13000:3000"]
     env_file: ./runtime/grafana.env
     environment:
@@ -68,7 +68,7 @@ services:
     mem_limit: 1g
     logging: *logging
   gateway:
-    image: nginx:1.28.0-alpine
+    image: ${NGINX_IMAGE:?set NGINX_IMAGE in .env}
     command: ["/bin/sh", "-ec", "cp /run/secrets/ingest.htpasswd /tmp/ingest.htpasswd; cp /run/secrets/goose.htpasswd /tmp/goose.htpasswd; chmod 644 /tmp/ingest.htpasswd /tmp/goose.htpasswd; exec nginx -g 'daemon off;'"]
     ports: ["${MONITORING_BIND_IP:?set WireGuard address}:3100:8080"]
     volumes:
@@ -81,7 +81,7 @@ services:
     logging: *logging
 # Fuji owns the backend, storage and local collector in one Compose project.
   rustfs:
-    image: rustfs/rustfs:1.0.0@sha256:8cc9801755448b71a786705ce76692c77e14936cccd87cf2fc31842e58f4d1ff
+    image: ${RUSTFS_IMAGE:?set RUSTFS_IMAGE in .env}
     entrypoint: ["/bin/sh", "/bootstrap/start-rustfs.sh"]
     env_file: ./runtime/rustfs.env
     environment:
@@ -118,7 +118,7 @@ services:
       start_period: 60s
     logging: *logging
   init:
-    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
+    image: ${MC_IMAGE:?set MC_IMAGE in .env}
     profiles: [bootstrap]
     env_file: [./runtime/rustfs.env, ./runtime/loki.env]
     entrypoint: [/bin/sh, /bootstrap/init.sh]
@@ -127,7 +127,7 @@ services:
       - ./storage/loki-policy.json:/bootstrap/loki-policy.json:ro
     restart: "no"
   alloy:
-    image: grafana/alloy:v1.19.2
+    image: ${ALLOY_IMAGE:?set ALLOY_IMAGE in .env}
     network_mode: host
     pid: host
     privileged: true

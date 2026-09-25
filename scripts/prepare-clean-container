@@ -19,6 +19,8 @@ chmod 0700 /state/alloy /install/runtime
 cp -R /source/agents/. /install/agents/
 cp -R /source/scripts/. /install/scripts/
 cp /source/README.md /install/README.md
+cp /source/.env.example /install/.env.example
+sh /source/scripts/prepare-env /source /install/.env
 cp "/source/runtime/agents/$node.env" /install/runtime/agent.env
 if [ "$node" = fujiserver ]; then
   mkdir -p /state/prometheus /state/grafana /state/loki
@@ -34,13 +36,14 @@ if [ "$node" = fujiserver ]; then
   cp /source/docker-compose.yaml /install/docker-compose.yaml
   cp -R /source/config /source/storage /install/
   for file in rustfs.env loki.env grafana.env ingest.htpasswd; do cp "/source/runtime/$file" "/install/runtime/$file"; done
-  printf 'MONITORING_BIND_IP=10.20.0.1\n' > /install/.env
 else
   sed -e 's#./config.alloy:#./agents/config.alloy:#' -e 's#../runtime/agent.env#./runtime/agent.env#' /source/agents/compose.yaml > /install/docker-compose.yaml
 fi
 find /install -type d -exec chmod 0755 {} +
 find /install -type f -exec chmod 0644 {} +
 find /install/scripts -type f -exec chmod 0755 {} +
+chown "$operator_uid:$operator_gid" /install/.env
+chmod 0600 /install/.env
 chown -R "$operator_uid:$operator_gid" /install/runtime
 chmod 0700 /install/runtime
 find /install/runtime -type f -exec chmod 0600 {} +

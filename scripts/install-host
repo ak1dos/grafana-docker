@@ -52,16 +52,16 @@ fi
 # Root-owned application files; private credentials readable by the Docker operator.
 dest=/opt/applications/homelab-monitoring
 install -d -m 0755 "$dest"
-for item in docker-compose.yaml config agents storage scripts; do
+for item in .env.example docker-compose.yaml config agents storage scripts; do
   cp -a "$source_dir/$item" "$dest/"
 done
+sh "$source_dir/scripts/prepare-env" "$source_dir" "$dest/.env"
 install -d -m 0700 "$dest/runtime"
 install -m 0600 "$source_dir/runtime/agents/$node.env" "$dest/runtime/agent.env"
 if [[ $node == fujiserver ]]; then
   for file in rustfs.env loki.env grafana.env ingest.htpasswd goose.htpasswd alertmanager.yml; do
     install -m 0600 "$source_dir/runtime/$file" "$dest/runtime/$file"
   done
-  printf 'MONITORING_BIND_IP=10.20.0.1\n' > "$dest/.env"
   sed -i 's/^S3_ENDPOINT=.*/S3_ENDPOINT=rustfs:9000/' "$dest/runtime/loki.env"
 else
   sed -e 's#./config.alloy:#./agents/config.alloy:#' -e 's#../runtime/agent.env#./runtime/agent.env#' "$dest/agents/compose.yaml" > "$dest/docker-compose.yaml"
