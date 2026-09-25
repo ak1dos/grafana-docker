@@ -26,11 +26,11 @@ Bind mount espliciti; nessun volume Docker nominato in produzione. Dataset ZFS `
 
 ### Budget memoria su Fuji
 
-Grafana ha un limite di 768 MiB e Alloy di 1 GiB. I precedenti limiti di
+Grafana e Alloy hanno un limite di 1 GiB ciascuno. I precedenti limiti di
 384 MiB hanno causato un OOM di Grafana e forte pressione memoria/swap in
 Alloy il 2026-09-25, con raccolte metriche intermittenti e dashboard lente.
 Prometheus e Loki mantengono 1 GiB ciascuno, RustFS 768 MiB, Alertmanager
-128 MiB e gateway 64 MiB: il totale dei limiti è 4,6875 GiB su circa 7,6 GiB
+128 MiB e gateway 64 MiB: il totale dei limiti è 4,9375 GiB su circa 7,6 GiB
 di RAM host. Sono massimi, non prenotazioni; gli altri servizi e il sistema
 operativo condividono la RAM restante. Monitorare pressione memoria, swap,
 OOM e durata delle raccolte dopo ogni variazione del carico.
