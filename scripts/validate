@@ -10,7 +10,7 @@ if [[ -d tests ]]; then
   python3 -m unittest discover -s tests -v
 fi
 bash -n scripts/install-host scripts/wait-vpn scripts/setup-compose-access
-sh -n storage/init.sh storage/start-rustfs.sh scripts/prepare-env scripts/prepare-clean-container
+sh -n storage/init.sh storage/test-s3.sh storage/start-rustfs.sh scripts/prepare-env scripts/prepare-clean-container
 MONITORING_BIND_IP=10.20.0.1 docker compose config -q
 docker compose --env-file .env -f agents/compose.yaml config -q
 docker run --rm -v "$repo_dir/config/prometheus:/etc/prometheus:ro" --entrypoint promtool "$(image_for prometheus)" check config /etc/prometheus/prometheus.yml

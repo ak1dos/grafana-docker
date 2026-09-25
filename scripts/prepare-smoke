@@ -43,10 +43,11 @@ s=s.replace('volumes:\n  prometheus-data:', '''  rustfs-permissions:
     volumes: ["rustfs-data:/data", "rustfs-logs:/logs"]
     mem_limit: 768m
   init:
-    image: ${MC_IMAGE:?set MC_IMAGE in .env}
+    image: ${RC_IMAGE:?set RC_IMAGE in .env}
     profiles: [bootstrap]
     env_file: [./runtime/rustfs.env, ./runtime/loki.env]
     entrypoint: [/bin/sh, /bootstrap/init.sh]
+    tmpfs: ["/home/rc:uid=100,gid=101,mode=0700,size=16777216"]
     volumes:
       - ./storage/init.sh:/bootstrap/init.sh:ro
       - ./storage/loki-policy.json:/bootstrap/loki-policy.json:ro

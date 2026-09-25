@@ -1,0 +1,48 @@
+#!/usr/bin/env python3
+"""Check bootstrap twice and bucket isolation on disposable RustFS, never production."""
+import json
+from pathlib import Path
+import subprocess
+import sys
+import tempfile
+
+root = Path(__file__).resolve().parents[1]
+# Do not resolve or print production service credentials.
+config = json.loads(subprocess.check_output([
+    'docker', 'compose', '--env-file', str(root / '.env'), '-f', str(root / 'docker-compose.yaml'),
+    '--profile', 'bootstrap', 'config', '--no-env-resolution', '--format', 'json'], text=True))
+with tempfile.TemporaryDirectory(prefix='homelab-rc-test-') as temp:
+    target = Path(temp)
+    subprocess.run([sys.executable, str(root / 'scripts/bootstrap'), str(target / 'runtime')], check=True)
+    compose = {
+        'services': {
+            'rustfs': {
+                'image': config['services']['rustfs']['image'],
+                'env_file': [str(target / 'runtime/rustfs.env')],
+                'environment': {'RUSTFS_VOLUMES': '/data', 'RUSTFS_ADDRESS': '0.0.0.0:9000',
+                                'RUSTFS_CONSOLE_ENABLE': 'false', 'RUSTFS_OBS_LOGGER_LEVEL': 'warn',
+                                'RUSTFS_OBS_LOG_DIRECTORY': '/logs'},
+                'tmpfs': ['/data:uid=10001,gid=10001,size=1073741824', '/logs:uid=10001,gid=10001,size=67108864'],
+            },
+            'init': {
+                'image': config['services']['init']['image'],
+                'env_file': [str(target / 'runtime/rustfs.env'), str(target / 'runtime/loki.env')],
+                'entrypoint': ['/bin/sh', '/bootstrap/init.sh'],
+                'tmpfs': config['services']['init']['tmpfs'],
+                'volumes': [str(root / 'storage') + ':/bootstrap:ro'],
+                'profiles': ['bootstrap'],
+            },
+        },
+    }
+    path = target / 'compose.json'
+    path.write_text(json.dumps(compose))
+    command = ['docker', 'compose', '-p', target.name, '-f', str(path)]
+    try:
+        subprocess.run(command + ['up', '-d', 'rustfs'], check=True)
+        for _ in range(2):
+            subprocess.run(command + ['run', '--rm', '--no-deps', 'init'], check=True, timeout=180)
+        subprocess.run(command + ['run', '--rm', '--no-deps', '--entrypoint', '/bin/sh',
+                                  'init', '/bootstrap/test-s3.sh'], check=True, timeout=90)
+        print('PASS: repeatable rc bootstrap and scoped S3 access')
+    finally:
+        subprocess.run(command + ['down', '--volumes', '--remove-orphans'], check=True)

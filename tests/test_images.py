@@ -8,7 +8,7 @@ import unittest
 ROOT = Path(__file__).resolve().parents[1]
 VARIABLES = {'prometheus': 'PROMETHEUS_IMAGE', 'alertmanager': 'ALERTMANAGER_IMAGE',
              'loki': 'LOKI_IMAGE', 'grafana': 'GRAFANA_IMAGE', 'gateway': 'NGINX_IMAGE',
-             'rustfs': 'RUSTFS_IMAGE', 'init': 'MC_IMAGE', 'alloy': 'ALLOY_IMAGE'}
+             'rustfs': 'RUSTFS_IMAGE', 'init': 'RC_IMAGE', 'alloy': 'ALLOY_IMAGE'}
 
 class ImageConfigurationTest(unittest.TestCase):
     def test_overrides_reach_both_compose_manifests(self):

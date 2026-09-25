@@ -62,7 +62,7 @@ La console RustFS resta sul loopback; dal Mac:
 ssh -N -L 9001:127.0.0.1:9001 mika@192.168.1.54
 ```
 
-Console: http://localhost:9001, credenziali in `runtime/rustfs.env`. Il bucket Loki usa un account separato limitato al bucket `loki`; il client mc è solo uno strumento di inizializzazione.
+Console: http://localhost:9001, credenziali in `runtime/rustfs.env`. Il bucket Loki usa un account separato limitato al bucket `loki`; il client ufficiale RustFS `rc` viene eseguito solo per l’inizializzazione.
 
 Il `docker-compose.yaml` principale contiene tutte le definizioni di Fuji, senza `extends`. `agents/compose.yaml` serve per l’installazione del solo Alloy su Ryzen. La cartella storage conserva gli script di bootstrap e la policy S3.
 
@@ -92,7 +92,7 @@ Versioni stabili verificate il 2026-09-25: [Prometheus 3.15.0](https://github.co
 [Nginx stable 1.30.5](https://nginx.org/en/download.html),
 [Alertmanager 0.34.1](https://github.com/prometheus/alertmanager/releases/tag/v0.34.1),
 [RustFS 1.0.0](https://github.com/rustfs/rustfs/releases/tag/1.0.0) e
-[mc RELEASE.2025-08-13T08-35-41Z](https://github.com/minio/mc/releases/tag/RELEASE.2025-08-13T08-35-41Z).
+[RustFS rc 0.1.36](https://github.com/rustfs/cli/releases/tag/v0.1.36).
 
 `python3 scripts/bootstrap` crea segreti nuovi e rifiuta sovrascritture. Fuji richiede tutti i file runtime, compreso `goose.htpasswd`, e il proprio file agente; Ryzen solo `runtime/agents/ryzen5lenovo.env`. Il primo setup host usa `sudo bash scripts/install-host` per filesystem e permessi. Successivamente si usa solo Compose. Non sono installati supervisori systemd del progetto.
 
@@ -103,6 +103,18 @@ docker compose up -d --wait --wait-timeout 180 rustfs
 docker compose --profile bootstrap run --rm init
 docker compose up -d
 ```
+
+Il bootstrap usa `RC_IMAGE` (`rustfs/rc`, versione e digest espliciti): crea il
+bucket Loki, l’utente dedicato e la policy limitata al bucket. Non richiede MinIO.
+Gli alias sono passati tramite `RC_HOST_*`; la home temporanea del client è in
+RAM e il container viene rimosso al termine. Per migrare un vecchio `.env`,
+eseguire `sh scripts/prepare-env . .env` e rimuovere la voce obsoleta `MC_IMAGE`.
+Non è necessario rieseguire il bootstrap per un'installazione già inizializzata.
+
+`python3 scripts/check-rustfs-bootstrap` collauda due bootstrap consecutivi e
+le operazioni S3 con accesso negato a un altro bucket, su un RustFS temporaneo
+senza porte pubblicate, dati di produzione o credenziali esistenti. Richiede
+Docker e rimuove container e rete di test anche in caso di errore.
 
 `scripts/prepare-clean-container` è uno strumento **distruttivo** per una reinstallazione esplicitamente richiesta: azzera soltanto i percorsi progetto montati in `/install`, `/state` e, su Fuji, `/objectroot/rustfs`. Non fa parte dell’avvio ordinario e non va eseguito sull’host direttamente.
 
