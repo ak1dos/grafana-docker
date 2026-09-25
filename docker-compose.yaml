@@ -65,7 +65,7 @@ services:
       - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./config/grafana/dashboards:/var/lib/grafana/dashboards:ro
     restart: unless-stopped
-    mem_limit: 384m
+    mem_limit: 768m
     logging: *logging
   gateway:
     image: nginx:1.28.0-alpine
@@ -151,7 +151,7 @@ services:
       - /run/log/journal:/run/log/journal:ro
       - /etc/machine-id:/etc/machine-id:ro
     restart: unless-stopped
-    mem_limit: 384m
+    mem_limit: 1g
     logging: *logging
 
 networks:
